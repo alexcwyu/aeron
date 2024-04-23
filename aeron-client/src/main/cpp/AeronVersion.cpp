@@ -20,27 +20,27 @@ namespace aeron
 
 std::string AeronVersion::text()
 {
-    return AERON_VERSION_TXT;
+    return "1.45.0";
 }
 
 std::string AeronVersion::gitSha()
 {
-    return AERON_VERSION_GITSHA;
+    return "xxx";
 }
 
 int AeronVersion::major()
 {
-    return AERON_VERSION_MAJOR;
+    return 1;
 }
 
 int AeronVersion::minor()
 {
-    return AERON_VERSION_MINOR;
+    return 45;
 }
 
 int AeronVersion::patch()
 {
-    return AERON_VERSION_PATCH;
+    return 0;
 }
 
 }

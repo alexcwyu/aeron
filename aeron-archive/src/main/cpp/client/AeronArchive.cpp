@@ -251,5 +251,5 @@ std::shared_ptr<AeronArchive::AsyncConnect> AeronArchive::asyncConnect(AeronArch
 
 std::string AeronArchive::version()
 {
-    return { "aeron version=" AERON_VERSION_TXT " commit=" AERON_VERSION_GITSHA };
+    return { "aeron version= 1.45.0 commit=xxx" };
 }

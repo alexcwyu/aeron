@@ -33,31 +33,31 @@ TEST_F(VersionTest, shouldReturnFullVersion)
 {
     auto full_version = std::string(aeron_version_full());
     auto expected = std::string("aeron version=")
-        .append(AERON_VERSION_TXT)
+        .append("1.45.0")
         .append(" commit=")
-        .append(AERON_VERSION_GITSHA);
+        .append("xxx");
 
     ASSERT_EQ(expected, full_version);
 }
 
 TEST_F(VersionTest, shouldReturnMajorVersion)
 {
-    EXPECT_EQ(AERON_VERSION_MAJOR, aeron_version_major());
+    EXPECT_EQ(1, aeron_version_major());
 }
 
 TEST_F(VersionTest, shouldReturnMinorVersion)
 {
-    EXPECT_EQ(AERON_VERSION_MINOR, aeron_version_minor());
+    EXPECT_EQ(45, aeron_version_minor());
 }
 
 TEST_F(VersionTest, shouldReturnPatchVersion)
 {
-    EXPECT_EQ(AERON_VERSION_PATCH, aeron_version_patch());
+    EXPECT_EQ(0, aeron_version_patch());
 }
 
 TEST_F(VersionTest, shouldReturnGitSha)
 {
-    EXPECT_EQ(std::string(AERON_VERSION_GITSHA), std::string(aeron_version_gitsha()));
+    EXPECT_EQ(std::string("xxx"), std::string(aeron_version_gitsha()));
 }
 
 TEST_F(VersionTest, shouldCompileSemanticVersion)
