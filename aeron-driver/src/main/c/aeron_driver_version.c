@@ -17,25 +17,25 @@
 
 const char *aeron_driver_version_text(void)
 {
-    return AERON_VERSION_TXT;
+    return "1.45.0";
 }
 
 const char *aeron_driver_version_git_sha(void)
 {
-    return AERON_VERSION_GITSHA;
+    return "xxx";
 }
 
 int aeron_driver_version_major(void)
 {
-    return AERON_VERSION_MAJOR;
+    return 1;
 }
 
 int aeron_driver_version_minor(void)
 {
-    return AERON_VERSION_MINOR;
+    return 45;
 }
 
 int aeron_driver_version_patch(void)
 {
-    return AERON_VERSION_PATCH;
+    return 0;
 }

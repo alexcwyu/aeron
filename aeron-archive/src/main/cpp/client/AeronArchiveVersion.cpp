@@ -20,27 +20,27 @@ namespace aeron { namespace archive { namespace client
 
 std::string AeronArchiveVersion::text()
 {
-    return AERON_VERSION_TXT;
+    return "1.45.0";
 }
 
 std::string AeronArchiveVersion::gitSha()
 {
-    return AERON_VERSION_GITSHA;
+    return "xxx";
 }
 
 int AeronArchiveVersion::major()
 {
-    return AERON_VERSION_MAJOR;
+    return 1;
 }
 
 int AeronArchiveVersion::minor()
 {
-    return AERON_VERSION_MINOR;
+    return 45;
 }
 
 int AeronArchiveVersion::patch()
 {
-    return AERON_VERSION_PATCH;
+    return 0;
 }
 
 }}}

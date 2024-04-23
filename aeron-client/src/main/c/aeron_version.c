@@ -16,7 +16,7 @@
 
 #include <stdint.h>
 
-const char aeron_version_full_str[] = "aeron version=" AERON_VERSION_TXT " commit=" AERON_VERSION_GITSHA;
+const char aeron_version_full_str[] = "aeron version= 1.45.0 commit=xxx" ;
 
 const char *aeron_version_full(void)
 {
@@ -25,27 +25,27 @@ const char *aeron_version_full(void)
 
 const char *aeron_version_text(void)
 {
-    return AERON_VERSION_TXT;
+    return "1.45.0";
 }
 
 int aeron_version_major(void)
 {
-    return AERON_VERSION_MAJOR;
+    return 1;
 }
 
 int aeron_version_minor(void)
 {
-    return AERON_VERSION_MINOR;
+    return 45;
 }
 
 int aeron_version_patch(void)
 {
-    return AERON_VERSION_PATCH;
+    return 0;
 }
 
 const char *aeron_version_gitsha(void)
 {
-    return AERON_VERSION_GITSHA;
+    return "xxx";
 }
 
 int32_t aeron_semantic_version_compose(uint8_t major, uint8_t minor, uint8_t patch)
