@@ -21,6 +21,8 @@
 #include "util/BitUtil.h"
 #include "concurrent/AtomicBuffer.h"
 #include "concurrent/logbuffer/DataFrameHeader.h"
+#include "concurrent/logbuffer/LogBufferDescriptor.h"
+#include "concurrent/logbuffer/FrameDescriptor.h"
 
 namespace aeron { namespace concurrent { namespace logbuffer {
 
