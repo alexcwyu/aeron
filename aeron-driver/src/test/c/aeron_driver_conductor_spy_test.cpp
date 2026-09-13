@@ -27,6 +27,38 @@ protected:
     }
 };
 
+TEST_F(DriverConductorSpyTest, shouldNotifyCorrectImageWhenRemovingSpyDestination)
+{
+    const int64_t client_id = nextCorrelationId();
+    const int64_t sub_id = nextCorrelationId();
+    const int64_t pub_id = nextCorrelationId();
+    const std::string spy_channel = std::string(AERON_SPY_PREFIX) + CHANNEL_1;
+    ASSERT_EQ(0, addSubscription(client_id, sub_id, CHANNEL_MDC_MANUAL, STREAM_ID_1));
+    ASSERT_EQ(0, addPublication(client_id, pub_id, CHANNEL_1, STREAM_ID_1, false));
+    doWorkUntilDone();
+    readAllBroadcastsFromConductor(null_broadcast_handler);
+    ASSERT_EQ(0, addReceiveDestination(client_id, nextCorrelationId(), sub_id, spy_channel.c_str()));
+    doWorkUntilDone();
+    int64_t available_id = -1;
+    EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_OPERATION_SUCCESS, _, _));
+    EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_AVAILABLE_IMAGE, _, _))
+        .WillOnce([&](int32_t, uint8_t *buffer, size_t)
+        {
+            available_id = reinterpret_cast<aeron_image_buffers_ready_t *>(buffer)->correlation_id;
+        });
+    readAllBroadcastsFromConductor(mock_broadcast_handler);
+    ASSERT_EQ(pub_id, available_id);
+    const int64_t remove_id = nextCorrelationId();
+    ASSERT_EQ(0, removeReceiveDestination(client_id, remove_id, sub_id, spy_channel.c_str()));
+    doWorkUntilDone();
+    EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_OPERATION_SUCCESS, _, _))
+        .With(IsOperationSuccess(remove_id));
+    EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_UNAVAILABLE_IMAGE, _, _))
+        .With(IsUnavailableImage(STREAM_ID_1, available_id, sub_id, spy_channel));
+    readAllBroadcastsFromConductor(mock_broadcast_handler);
+    EXPECT_EQ(0u, aeron_driver_conductor_num_spy_subscriptions(&m_conductor.m_conductor));
+}
+
 TEST_F(DriverConductorSpyTest, shouldBeAbleToAddSingleSubscription)
 {
     int64_t client_id = nextCorrelationId();

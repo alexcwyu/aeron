@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <thread>
 #include <functional>
+#include <tuple>
 
 #include <gtest/gtest.h>
 
@@ -27,6 +28,7 @@ extern "C"
 #include "aeron_publication.h"
 #include "aeron_exclusive_publication.h"
 #include "aeron_subscription.h"
+#include "aeron_image.h"
 #include "aeron_context.h"
 #include "aeron_cnc_file_descriptor.h"
 #include "concurrent/aeron_mpsc_rb.h"
@@ -273,14 +275,17 @@ public:
         return work_count;
     }
 
-    void transmitOnPublicationReady(aeron_async_add_publication_t *async, const std::string &logFile, bool isExclusive)
+    void transmitOnPublicationReady(
+        aeron_async_add_publication_t *async, const std::string &logFile, bool isExclusive,
+        int64_t originalRegistrationId = AERON_NULL_VALUE)
     {
         char response_buffer[sizeof(aeron_publication_buffers_ready_t) + AERON_ERROR_MAX_TOTAL_LENGTH];
         auto response = reinterpret_cast<aeron_publication_buffers_ready_t *>(response_buffer);
         int32_t position_limit_counter_id = 10, channel_status_indicator_id = 11;
 
         response->correlation_id = async->registration_id;
-        response->registration_id = async->registration_id;
+        response->registration_id = originalRegistrationId == AERON_NULL_VALUE ?
+            async->registration_id : originalRegistrationId;
         response->stream_id = async->stream_id;
         response->session_id = SESSION_ID;
         response->position_limit_counter_id = position_limit_counter_id;
@@ -896,6 +901,56 @@ TEST_F(ClientConductorTest, shouldHandlePublicationAddRemoveDestination)
 
     // graceful close and reclaim for sanitize
     ASSERT_EQ(aeron_publication_close(publication, nullptr, nullptr), 0);
+    doWork();
+}
+
+TEST_F(ClientConductorTest, shouldTargetOriginalPublicationForDestinationCommands)
+{
+    aeron_async_add_publication_t *async_pub = nullptr;
+    aeron_publication_t *publication = nullptr;
+    constexpr int64_t original_id = 777;
+
+    ASSERT_EQ(0, aeron_client_conductor_async_add_publication(&async_pub, &m_conductor, URI_RESERVED, STREAM_ID));
+    doWork();
+    const int64_t client_registration_id = async_pub->registration_id;
+    ASSERT_NE(original_id, client_registration_id);
+    transmitOnPublicationReady(async_pub, m_logFileName, false, original_id);
+    createLogFile(m_logFileName);
+    doWork();
+    ASSERT_GT(aeron_async_add_publication_poll(&publication, async_pub), 0);
+    ASSERT_EQ(original_id, publication->original_registration_id);
+    ASSERT_EQ(client_registration_id, publication->registration_id);
+
+    m_to_driver_handler = [](int32_t, const void *, size_t) {};
+    aeron_mpsc_rb_read(&m_to_driver, ToDriverHandler, this, 100);
+    for (const bool add : {true, false})
+    {
+        aeron_async_destination_t *async_dest = nullptr;
+        ASSERT_EQ(0, add ?
+            aeron_client_conductor_async_add_publication_destination(
+                &async_dest, &m_conductor, publication, DEST_URI) :
+            aeron_client_conductor_async_remove_publication_destination(
+                &async_dest, &m_conductor, publication, DEST_URI));
+        doWork();
+        int commands = 0;
+        m_to_driver_handler = [&](int32_t type, const void *buffer, size_t length)
+        {
+            ASSERT_EQ(add ? AERON_COMMAND_ADD_DESTINATION : AERON_COMMAND_REMOVE_DESTINATION, type);
+            ASSERT_GE(length, sizeof(aeron_destination_command_t));
+            const auto *command = static_cast<const aeron_destination_command_t *>(buffer);
+            EXPECT_EQ(original_id, command->registration_id);
+            EXPECT_EQ(async_dest->registration_id, command->correlated.correlation_id);
+            EXPECT_EQ(std::string(DEST_URI), std::string(
+                static_cast<const char *>(buffer) + sizeof(*command), command->channel_length));
+            commands++;
+        };
+        aeron_mpsc_rb_read(&m_to_driver, ToDriverHandler, this, 100);
+        ASSERT_EQ(1, commands);
+        transmitOnOperationSuccess(async_dest);
+        doWork();
+        ASSERT_GT(aeron_publication_async_destination_poll(async_dest), 0);
+    }
+    ASSERT_EQ(0, aeron_publication_close(publication, nullptr, nullptr));
     doWork();
 }
 
@@ -1548,6 +1603,110 @@ TEST_F(ClientConductorTest, shouldAsyncCloseSubscription)
     EXPECT_TRUE(on_close_called);
     EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
 }
+
+class RetainedImageCloseTest : public ClientConductorTest,
+    public testing::WithParamInterface<std::tuple<bool, int, bool, bool>>
+{
+};
+
+TEST_P(RetainedImageCloseTest, shouldCloseNotifyAndReleaseExactlyOnce)
+{
+    const bool invoker = std::get<0>(GetParam());
+    const int retained = std::get<1>(GetParam());
+    const bool release_in_callback = std::get<2>(GetParam());
+    const bool already_unavailable = std::get<3>(GetParam());
+    m_conductor.invoker_mode = invoker;
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+    int callbacks = 0;
+    std::function<void(aeron_subscription_t *, aeron_image_t *)> unavailable =
+        [&](aeron_subscription_t *sub, aeron_image_t *image)
+        {
+            callbacks++;
+            EXPECT_EQ(subscription, sub);
+            EXPECT_TRUE(aeron_image_is_closed(image));
+            EXPECT_EQ(64, aeron_image_position(image));
+            aeron_image_constants_t constants = {};
+            EXPECT_EQ(0, aeron_image_constants(image, &constants));
+            EXPECT_EQ(subscription, constants.subscription);
+            if (release_in_callback)
+            {
+                for (int i = 0; i < retained; i++)
+                {
+                    EXPECT_EQ(0, aeron_image_release(image));
+                }
+            }
+        };
+    auto callback = [](void *clientd, aeron_subscription_t *sub, aeron_image_t *image)
+    {
+        (*static_cast<decltype(unavailable) *>(clientd))(sub, image);
+    };
+    ASSERT_EQ(0, aeron_client_conductor_async_add_subscription(
+        &async, &m_conductor, SUB_URI, STREAM_ID, nullptr, nullptr, callback, &unavailable));
+    doWork();
+    transmitOnSubscriptionReady(async);
+    doWork();
+    ASSERT_GT(aeron_async_add_subscription_poll(&subscription, async), 0);
+
+    createLogFile(m_logFileName);
+    std::vector<uint8_t> response_buffer(sizeof(aeron_image_buffers_ready_t) +
+        2 * sizeof(int32_t) + AERON_ALIGN(m_logFileName.size(), sizeof(int32_t)));
+    auto *response = reinterpret_cast<aeron_image_buffers_ready_t *>(response_buffer.data());
+    response->correlation_id = 777;
+    response->session_id = SESSION_ID;
+    response->stream_id = STREAM_ID;
+    response->subscriber_registration_id = subscription->registration_id;
+    response->subscriber_position_id = 12;
+    const int32_t log_length = static_cast<int32_t>(m_logFileName.size());
+    memcpy(response_buffer.data() + sizeof(*response), &log_length, sizeof(log_length));
+    memcpy(response_buffer.data() + sizeof(*response) + sizeof(log_length), m_logFileName.data(), log_length);
+    aeron_counter_set_release(aeron_counters_reader_addr(&m_conductor.counters_reader, 12), 64);
+    ASSERT_EQ(0, aeron_broadcast_transmitter_transmit(
+        &m_to_clients, AERON_RESPONSE_ON_AVAILABLE_IMAGE, response_buffer.data(), response_buffer.size()));
+    doWork();
+    ASSERT_EQ(1, aeron_subscription_image_count(subscription));
+    aeron_image_t *image = nullptr;
+    for (int i = 0; i < retained; i++)
+    {
+        image = aeron_subscription_image_by_session_id(subscription, SESSION_ID);
+        ASSERT_NE(nullptr, image);
+    }
+    if (already_unavailable)
+    {
+        aeron_image_message_t unavailable_response = {};
+        unavailable_response.correlation_id = 777;
+        unavailable_response.subscription_registration_id = subscription->registration_id;
+        unavailable_response.stream_id = STREAM_ID;
+        ASSERT_EQ(0, aeron_broadcast_transmitter_transmit(
+            &m_to_clients, AERON_RESPONSE_ON_UNAVAILABLE_IMAGE,
+            &unavailable_response, sizeof(unavailable_response)));
+        doWork();
+        ASSERT_EQ(0, aeron_subscription_image_count(subscription));
+        EXPECT_EQ(1, callbacks);
+    }
+    ASSERT_EQ(0, aeron_subscription_close(subscription, nullptr, nullptr));
+    doWork();
+    EXPECT_EQ(1, callbacks);
+    if (retained > 0 && !release_in_callback)
+    {
+        ASSERT_EQ(retained, aeron_image_refcnt_acquire(image));
+        EXPECT_TRUE(aeron_image_is_closed(image));
+        EXPECT_EQ(64, aeron_image_position(image));
+        EXPECT_EQ(nullptr, image->subscription);
+        EXPECT_EQ(INT64_MIN, image->removal_change_number);
+        for (int i = 0; i < retained; i++)
+        {
+            EXPECT_EQ(0, aeron_image_release(image));
+        }
+    }
+    doWorkForNs(CLIENT_IDLE_SLEEP_INTERVAL * 2);
+    EXPECT_EQ(0u, m_conductor.lingering_resources.length);
+    EXPECT_EQ(1, callbacks);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    CloseModes, RetainedImageCloseTest,
+    testing::Combine(testing::Bool(), testing::Values(0, 1, 2), testing::Bool(), testing::Bool()));
 
 TEST_F(ClientConductorTest, shouldAsyncCloseSubscriptionIfClientBufferIsFull)
 {

@@ -1550,6 +1550,11 @@ static int aeron_client_conductor_linger_or_delete_all_images(
     {
         aeron_image_t *image = current_image_list->array[i];
         aeron_image_close(image);
+        if (NULL != subscription->on_unavailable_image)
+        {
+            subscription->on_unavailable_image(subscription->on_unavailable_image_clientd, subscription, image);
+        }
+
         int64_t refcnt = aeron_image_decr_refcnt(image);
         image->subscription = NULL;
         image->removal_change_number = INT64_MIN;
@@ -1561,11 +1566,6 @@ static int aeron_client_conductor_linger_or_delete_all_images(
 
         if (refcnt <= 0)
         {
-            if (NULL != subscription->on_unavailable_image)
-            {
-                subscription->on_unavailable_image(subscription->on_unavailable_image_clientd, subscription, image);
-            }
-
             aeron_client_conductor_release_log_buffer(conductor, image->log_buffer);
             aeron_image_delete(image);
         }
