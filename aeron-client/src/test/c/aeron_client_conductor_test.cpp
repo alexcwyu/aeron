@@ -273,14 +273,17 @@ public:
         return work_count;
     }
 
-    void transmitOnPublicationReady(aeron_async_add_publication_t *async, const std::string &logFile, bool isExclusive)
+    void transmitOnPublicationReady(
+        aeron_async_add_publication_t *async, const std::string &logFile, bool isExclusive,
+        int64_t originalRegistrationId = AERON_NULL_VALUE)
     {
         char response_buffer[sizeof(aeron_publication_buffers_ready_t) + AERON_ERROR_MAX_TOTAL_LENGTH];
         auto response = reinterpret_cast<aeron_publication_buffers_ready_t *>(response_buffer);
         int32_t position_limit_counter_id = 10, channel_status_indicator_id = 11;
 
         response->correlation_id = async->registration_id;
-        response->registration_id = async->registration_id;
+        response->registration_id = originalRegistrationId == AERON_NULL_VALUE ?
+            async->registration_id : originalRegistrationId;
         response->stream_id = async->stream_id;
         response->session_id = SESSION_ID;
         response->position_limit_counter_id = position_limit_counter_id;
@@ -896,6 +899,56 @@ TEST_F(ClientConductorTest, shouldHandlePublicationAddRemoveDestination)
 
     // graceful close and reclaim for sanitize
     ASSERT_EQ(aeron_publication_close(publication, nullptr, nullptr), 0);
+    doWork();
+}
+
+TEST_F(ClientConductorTest, shouldTargetOriginalPublicationForDestinationCommands)
+{
+    aeron_async_add_publication_t *async_pub = nullptr;
+    aeron_publication_t *publication = nullptr;
+    constexpr int64_t original_id = 777;
+
+    ASSERT_EQ(0, aeron_client_conductor_async_add_publication(&async_pub, &m_conductor, URI_RESERVED, STREAM_ID));
+    doWork();
+    const int64_t client_registration_id = async_pub->registration_id;
+    ASSERT_NE(original_id, client_registration_id);
+    transmitOnPublicationReady(async_pub, m_logFileName, false, original_id);
+    createLogFile(m_logFileName);
+    doWork();
+    ASSERT_GT(aeron_async_add_publication_poll(&publication, async_pub), 0);
+    ASSERT_EQ(original_id, publication->original_registration_id);
+    ASSERT_EQ(client_registration_id, publication->registration_id);
+
+    m_to_driver_handler = [](int32_t, const void *, size_t) {};
+    aeron_mpsc_rb_read(&m_to_driver, ToDriverHandler, this, 100);
+    for (const bool add : {true, false})
+    {
+        aeron_async_destination_t *async_dest = nullptr;
+        ASSERT_EQ(0, add ?
+            aeron_client_conductor_async_add_publication_destination(
+                &async_dest, &m_conductor, publication, DEST_URI) :
+            aeron_client_conductor_async_remove_publication_destination(
+                &async_dest, &m_conductor, publication, DEST_URI));
+        doWork();
+        int commands = 0;
+        m_to_driver_handler = [&](int32_t type, const void *buffer, size_t length)
+        {
+            ASSERT_EQ(add ? AERON_COMMAND_ADD_DESTINATION : AERON_COMMAND_REMOVE_DESTINATION, type);
+            ASSERT_GE(length, sizeof(aeron_destination_command_t));
+            const auto *command = static_cast<const aeron_destination_command_t *>(buffer);
+            EXPECT_EQ(original_id, command->registration_id);
+            EXPECT_EQ(async_dest->registration_id, command->correlated.correlation_id);
+            EXPECT_EQ(std::string(DEST_URI), std::string(
+                static_cast<const char *>(buffer) + sizeof(*command), command->channel_length));
+            commands++;
+        };
+        aeron_mpsc_rb_read(&m_to_driver, ToDriverHandler, this, 100);
+        ASSERT_EQ(1, commands);
+        transmitOnOperationSuccess(async_dest);
+        doWork();
+        ASSERT_GT(aeron_publication_async_destination_poll(async_dest), 0);
+    }
+    ASSERT_EQ(0, aeron_publication_close(publication, nullptr, nullptr));
     doWork();
 }
 

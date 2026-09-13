@@ -2109,11 +2109,11 @@ static int aeron_client_conductor_get_async_registration_id(
     switch (async->resource.base_resource->type)
     {
         case AERON_CLIENT_MANAGED_RESOURCE_TYPE_PUBLICATION:
-            *resource_registration_id = async->resource.publication->registration_id;
+            *resource_registration_id = async->resource.publication->original_registration_id;
             break;
 
         case AERON_CLIENT_MANAGED_RESOURCE_TYPE_EXCLUSIVE_PUBLICATION:
-            *resource_registration_id = async->resource.exclusive_publication->registration_id;
+            *resource_registration_id = async->resource.exclusive_publication->original_registration_id;
             break;
 
         case AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION:
