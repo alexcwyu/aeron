@@ -235,6 +235,7 @@ int aeron_network_publication_create(
     _pub->flow_control = flow_control_strategy;
     // Will be called from sender thread.
     _pub->cached_clock = context->sender_cached_clock;
+    _pub->conductor_fields.subscribable.correlation_id = registration_id;
     _pub->conductor_fields.subscribable.array = NULL;
     _pub->conductor_fields.subscribable.length = 0;
     _pub->conductor_fields.subscribable.capacity = 0;
