@@ -46,21 +46,20 @@ void aeron_idle_strategy_sleeping_idle(void *state, int work_count)
 
 int aeron_idle_strategy_sleeping_init_args(void **state, const char *env_var, const char *init_args)
 {
+    uint64_t duration_ns = 1;
+
+    if (NULL != init_args && aeron_parse_duration_ns(init_args, &duration_ns) < 0)
+    {
+        return -1;
+    }
+
     if (aeron_alloc(state, sizeof(uint64_t)) < 0)
     {
         AERON_APPEND_ERR("%s", "Failed to allocate sleeping state");
         return -1;
     }
 
-    uint64_t *duration_ns = (uint64_t *)*state;
-    if (NULL == init_args)
-    {
-        *duration_ns = 1;
-    }
-    else
-    {
-        return aeron_parse_duration_ns(init_args, duration_ns);
-    }
+    *(uint64_t *)*state = duration_ns;
 
     return 0;
 }
