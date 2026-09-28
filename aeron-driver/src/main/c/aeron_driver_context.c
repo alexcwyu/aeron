@@ -3077,6 +3077,17 @@ int aeron_driver_context_set_send_channel_loss_supplier(
     return 0;
 }
 
+aeron_send_channel_loss_supplier_func_t aeron_driver_context_get_send_channel_loss_supplier(
+    aeron_driver_context_t *context)
+{
+    return NULL != context ? context->send_channel_loss_supplier_func : NULL;
+}
+
+void *aeron_driver_context_get_send_channel_loss_supplier_clientd(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->send_channel_loss_supplier_clientd : NULL;
+}
+
 int aeron_driver_context_set_receive_channel_loss_supplier(
     aeron_driver_context_t *context,
     aeron_receive_channel_loss_supplier_func_t func,
@@ -3087,6 +3098,17 @@ int aeron_driver_context_set_receive_channel_loss_supplier(
     context->receive_channel_loss_supplier_func = func;
     context->receive_channel_loss_supplier_clientd = clientd;
     return 0;
+}
+
+aeron_receive_channel_loss_supplier_func_t aeron_driver_context_get_receive_channel_loss_supplier(
+    aeron_driver_context_t *context)
+{
+    return NULL != context ? context->receive_channel_loss_supplier_func : NULL;
+}
+
+void *aeron_driver_context_get_receive_channel_loss_supplier_clientd(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->receive_channel_loss_supplier_clientd : NULL;
 }
 
 int aeron_driver_context_set_resolver_neighbor_timeout_ns(aeron_driver_context_t *context, uint64_t value)

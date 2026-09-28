@@ -159,17 +159,6 @@ typedef void (*aeron_driver_name_resolver_on_host_name_t)(
     int64_t duration_ns,
     const char *host_name);
 
-struct aeron_send_channel_endpoint_stct;
-struct aeron_receive_channel_endpoint_stct;
-
-typedef void (*aeron_send_channel_loss_supplier_func_t)(
-    void *clientd,
-    struct aeron_send_channel_endpoint_stct *endpoint);
-
-typedef void (*aeron_receive_channel_loss_supplier_func_t)(
-    void *clientd,
-    struct aeron_receive_channel_endpoint_stct *endpoint);
-
 typedef struct aeron_driver_context_stct
 {
     char aeron_dir[AERON_MAX_PATH];                         /* aeron.dir */
@@ -451,16 +440,6 @@ int aeron_driver_context_bindings_clientd_find(aeron_driver_context_t *context, 
 
 aeron_driver_context_bindings_clientd_entry_t *aeron_driver_context_bindings_clientd_get_or_find_first_free_entry(
     aeron_driver_context_t *context, const char *name);
-
-int aeron_driver_context_set_send_channel_loss_supplier(
-    aeron_driver_context_t *context,
-    aeron_send_channel_loss_supplier_func_t func,
-    void *clientd);
-
-int aeron_driver_context_set_receive_channel_loss_supplier(
-    aeron_driver_context_t *context,
-    aeron_receive_channel_loss_supplier_func_t func,
-    void *clientd);
 
 int aeron_driver_context_apply_cpuset_affinity(aeron_driver_context_t *context, const int *cpus, int cpu_count);
 

@@ -779,6 +779,40 @@ int aeron_driver_context_set_udp_channel_incoming_interceptors(
 aeron_udp_channel_interceptor_bindings_t *aeron_driver_context_get_udp_channel_incoming_interceptors(
     aeron_driver_context_t *context);
 
+struct aeron_send_channel_endpoint_stct;
+struct aeron_receive_channel_endpoint_stct;
+
+/**
+ * Called with each new send channel endpoint, for example to attach loss generators to it. Unset (NULL) by default.
+ */
+typedef void (*aeron_send_channel_loss_supplier_func_t)(
+    void *clientd,
+    struct aeron_send_channel_endpoint_stct *endpoint);
+
+/**
+ * Called with each new receive channel endpoint, for example to attach loss generators to it. Unset (NULL) by
+ * default.
+ */
+typedef void (*aeron_receive_channel_loss_supplier_func_t)(
+    void *clientd,
+    struct aeron_receive_channel_endpoint_stct *endpoint);
+
+int aeron_driver_context_set_send_channel_loss_supplier(
+    aeron_driver_context_t *context,
+    aeron_send_channel_loss_supplier_func_t func,
+    void *clientd);
+aeron_send_channel_loss_supplier_func_t aeron_driver_context_get_send_channel_loss_supplier(
+    aeron_driver_context_t *context);
+void *aeron_driver_context_get_send_channel_loss_supplier_clientd(aeron_driver_context_t *context);
+
+int aeron_driver_context_set_receive_channel_loss_supplier(
+    aeron_driver_context_t *context,
+    aeron_receive_channel_loss_supplier_func_t func,
+    void *clientd);
+aeron_receive_channel_loss_supplier_func_t aeron_driver_context_get_receive_channel_loss_supplier(
+    aeron_driver_context_t *context);
+void *aeron_driver_context_get_receive_channel_loss_supplier_clientd(aeron_driver_context_t *context);
+
 #define AERON_PUBLICATION_RESERVED_SESSION_ID_LOW_ENV_VAR "AERON_PUBLICATION_RESERVED_SESSION_ID_LOW"
 
 int aeron_driver_context_set_publication_reserved_session_id_low(aeron_driver_context_t *context, int32_t value);

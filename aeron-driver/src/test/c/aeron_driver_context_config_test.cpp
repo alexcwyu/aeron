@@ -33,6 +33,14 @@ static const uint32_t DEFAULT_VALUE = UINT32_C(4);
 static const uint32_t MIN_VALUE = UINT32_C(1);
 static const uint32_t MAX_VALUE = UINT32_C(16);
 
+static void test_send_channel_loss_supplier(void *clientd, struct aeron_send_channel_endpoint_stct *endpoint)
+{
+}
+
+static void test_receive_channel_loss_supplier(void *clientd, struct aeron_receive_channel_endpoint_stct *endpoint)
+{
+}
+
 class DriverContextConfigTest : public testing::Test
 {
 protected:
@@ -462,6 +470,33 @@ TEST_F(DriverContextConfigTest, shouldSetConductorUdpChannelTransportBindingsSep
     EXPECT_EQ(default_bindings, aeron_driver_context_get_udp_channel_transport_bindings(context));
 
     EXPECT_EQ(-1, aeron_driver_context_set_conductor_udp_channel_transport_bindings(nullptr, &conductor_bindings));
+
+    aeron_driver_context_close(context);
+}
+
+TEST_F(DriverContextConfigTest, shouldSetChannelLossSuppliers)
+{
+    aeron_driver_context_t *context;
+    int send_clientd = 0;
+    int receive_clientd = 0;
+
+    ASSERT_EQ(0, aeron_driver_context_init(&context)) << aeron_errmsg();
+    EXPECT_EQ(nullptr, aeron_driver_context_get_send_channel_loss_supplier(context));
+    EXPECT_EQ(nullptr, aeron_driver_context_get_send_channel_loss_supplier_clientd(context));
+    EXPECT_EQ(nullptr, aeron_driver_context_get_receive_channel_loss_supplier(context));
+    EXPECT_EQ(nullptr, aeron_driver_context_get_receive_channel_loss_supplier_clientd(context));
+
+    EXPECT_EQ(0, aeron_driver_context_set_send_channel_loss_supplier(
+        context, test_send_channel_loss_supplier, &send_clientd));
+    EXPECT_EQ(0, aeron_driver_context_set_receive_channel_loss_supplier(
+        context, test_receive_channel_loss_supplier, &receive_clientd));
+    EXPECT_EQ(test_send_channel_loss_supplier, aeron_driver_context_get_send_channel_loss_supplier(context));
+    EXPECT_EQ(&send_clientd, aeron_driver_context_get_send_channel_loss_supplier_clientd(context));
+    EXPECT_EQ(test_receive_channel_loss_supplier, aeron_driver_context_get_receive_channel_loss_supplier(context));
+    EXPECT_EQ(&receive_clientd, aeron_driver_context_get_receive_channel_loss_supplier_clientd(context));
+
+    EXPECT_EQ(0, aeron_driver_context_set_send_channel_loss_supplier(context, nullptr, nullptr));
+    EXPECT_EQ(nullptr, aeron_driver_context_get_send_channel_loss_supplier(context));
 
     aeron_driver_context_close(context);
 }
