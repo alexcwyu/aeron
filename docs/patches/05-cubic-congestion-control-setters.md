@@ -20,11 +20,14 @@ defaults move from `aeron_congestion_control.c` to `aeron_driver_context.h`
 
 ## Why
 
-These were the only driver settings that could be configured by environment
-variable alone: `aeron_cubic_congestion_control_strategy_supplier` read them
-with `getenv` each time it created a strategy. An embedding application (the
-Rust wrapper) had no way to configure them per context, as Java's
-`CubicCongestionControlConfiguration` system properties allow.
+These driver settings could be configured by environment variable alone:
+`aeron_cubic_congestion_control_strategy_supplier` read them with `getenv`
+each time it created a strategy. An embedding application (the Rust wrapper)
+had no way to configure them per context, as Java's
+`CubicCongestionControlConfiguration` system properties allow. They are one of
+the families this patch set covers; the inventory in
+[LOCAL-PATCH-REVIEW.md](../../LOCAL-PATCH-REVIEW.md#inventory)
+lists the environment-only settings that remain, and why.
 
 ## Behaviour
 
@@ -51,15 +54,20 @@ No hot-path code changes: the strategy reads the values once, at creation.
   `cubicCongestionControlStrategyConfiguration` driven through the setters with
   the variables unset, plus one RTT-timeout check at 22 s that only a 1 s
   initial RTT satisfies.
+- `CongestionControlTest.cubicCongestionControlSupplierUsesSetInitialRttOverInvalidEnvValue`:
+  with an invalid `AERON_CUBICCONGESTIONCONTROL_INITIALRTT`, a set initial RTT
+  still lets strategy creation succeed (added by the tests commit).
 - `CongestionControlTest.cubicCongestionControlSupplierReturnsNegativeValueIfInitialRttIsInvalid`
   is unchanged and still passes.
 
-Negative control: with `aeron_congestion_control.c` restored to
+Negative controls: with `aeron_congestion_control.c` restored to
 `1.53.3-patch.1`, the setter test fails (`should_measure_rtt` false at 10 s and
-30 s, because the set values never reach the strategy).
+30 s, because the set values never reach the strategy); with the set-value
+branch disabled, the invalid-variable test fails (creation returns `-1`).
 
 Linux x86-64, GCC, Debug, 2026-09-28: `congestion_control_test` 12/12,
-`driver_context_config_test` 18/18.
+`driver_context_config_test` 18/18; with the tests commit,
+`congestion_control_test` 13/13.
 
 ## Reproduce
 

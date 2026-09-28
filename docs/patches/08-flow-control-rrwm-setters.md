@@ -39,8 +39,20 @@ rejected with `EINVAL` without changing the stored values. The existing
 `flow_control_test` cases that read the fields into each strategy still pass.
 
 Linux x86-64, GCC, Debug, 2026-09-28: `driver_context_config_test` 21/21,
-`flow_control_test` 66/66. Build and run as in
-[05](05-cubic-congestion-control-setters.md#reproduce).
+`flow_control_test` 66/66.
+
+## Reproduce
+
+```sh
+cmake -S . -B build-c-tests -DCMAKE_BUILD_TYPE=Debug -DAERON_TESTS=ON \
+  -DAERON_SYSTEM_TESTS=OFF -DAERON_BUILD_SAMPLES=OFF -DBUILD_AERON_ARCHIVE_API=OFF
+cmake --build build-c-tests --target driver_context_config_test flow_control_test
+LD_LIBRARY_PATH=$PWD/build-c-tests/lib ctest --test-dir build-c-tests \
+  -R '^(driver_context_config_test|flow_control_test)$' --output-on-failure
+```
+
+`LD_LIBRARY_PATH` takes precedence over the binaries' `RUNPATH`; on a host with
+an older `libaeron_driver.so` on that path, point it at the build first.
 
 ## Upstream candidate
 

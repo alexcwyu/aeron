@@ -375,6 +375,34 @@ TEST_F(CongestionControlTest, cubicCongestionControlSupplierReturnsNegativeValue
     EXPECT_EQ(nullptr, congestion_control_strategy);
 }
 
+TEST_F(CongestionControlTest, cubicCongestionControlSupplierUsesSetInitialRttOverInvalidEnvValue)
+{
+    const char *channel = "aeron:udp?endpoint=192.168.0.1:9999\0";
+    aeron_congestion_control_strategy_t *congestion_control_strategy = nullptr;
+    aeron_udp_channel_t *udp_channel = parse_udp_channel(channel);
+
+    aeron_env_set(AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR, "initial_rtt wrong value");
+    ASSERT_EQ(0, aeron_driver_context_set_cubic_congestion_control_initial_rtt_ns(m_context, 1000000000LL));
+
+    const int result = aeron_cubic_congestion_control_strategy_supplier(
+        &congestion_control_strategy,
+        udp_channel,
+        2,
+        15,
+        1,
+        1024,
+        9000,
+        nullptr,
+        nullptr,
+        m_context,
+        &m_counters_manager);
+
+    ASSERT_EQ(0, result) << aeron_errmsg();
+    ASSERT_NE(nullptr, congestion_control_strategy);
+
+    congestion_control_strategy->fini(congestion_control_strategy);
+}
+
 TEST_F(CongestionControlTest, cubicCongestionControlStrategyConfiguration)
 {
     aeron_env_set(AERON_CUBICCONGESTIONCONTROL_TCPMODE_ENV_VAR, "true");

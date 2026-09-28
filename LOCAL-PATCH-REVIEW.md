@@ -113,3 +113,38 @@ included.
 | 6 | Conductor UDP channel transport bindings | `aeronmd.h` | `driver_context_config_test` | yes | [Conductor bindings](docs/patches/06-conductor-udp-channel-transport-bindings-setter.md) |
 | 7 | Send and receive channel loss suppliers (moved from the internal header, plus getters) | `aeronmd.h` | `driver_context_config_test`, `aeron_test_loss_generators_test` | yes | [Loss suppliers](docs/patches/07-channel-loss-supplier-public-api.md) |
 | 8 | Unicast and multicast flow control retransmit receiver window multiples (`rrwm`) | `aeronmd.h` | `driver_context_config_test`, `flow_control_test` | yes | [rrwm](docs/patches/08-flow-control-rrwm-setters.md) |
+
+A fifth commit, on top of the four families, adds tests and test recipes:
+`CongestionControlTest.cubicCongestionControlSupplierUsesSetInitialRttOverInvalidEnvValue`
+(a set initial RTT wins over an invalid `AERON_CUBICCONGESTIONCONTROL_INITIALRTT`,
+so strategy creation succeeds), a note in `aeronmd.h` that the initial RTT
+getter reads an invalid variable as the default while strategy creation still
+fails on it, and reproduce recipes of their own for 07 and 08.
+
+### Inventory
+
+The inventory covered 147 `AERON_*` environment variables across the driver,
+client and archive-client C libraries at `1.53.3-patch.1`:
+
+- 125 already had a public setter.
+- 4 get one here: the three Cubic variables (05) and the conductor transport
+  bindings (06).
+- 2 are defined but never read: `AERON_NAME_RESOLVER_CSV_LOOKUP_TABLE_ARGS`,
+  and the client library's copy of `AERON_AGENT_ON_START_FUNCTION` (the driver
+  reads its own).
+- 16 stay environment-only:
+  - `AERON_DRIVER_DYNAMIC_LIBRARIES`: `aeron_driver_context_init` loads the
+    libraries before any setter can run.
+  - `AERON_EVENT_LOG`, `AERON_EVENT_LOG_DISABLE`, `AERON_EVENT_LOG_FILENAME`
+    and `AERON_EVENT_LOG_FILE_MAX_LENGTH`: process-wide event logging, which
+    the driver's agent initialises once from the environment when
+    `aeron_driver_context_init` runs.
+  - The eight `AERON_DEBUG_{SEND,RECEIVE}_{DATA,CONTROL}_LOSS_{RATE,SEED}`:
+    read by the debug channel endpoints, not the driver context. 07 exposes
+    the suppliers that install them.
+  - The three `AERON_UDP_CHANNEL_TRANSPORT_BINDINGS_*LOSS_ARGS`: read by the
+    loss modules' `*_load_env(void)`, which has no driver context.
+
+A comparison of the `aeron_driver_context_t` fields against the public setters
+added the two families that have no environment variable in C: the loss
+suppliers (07) and the rrwm pair (08).

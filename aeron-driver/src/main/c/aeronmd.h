@@ -375,6 +375,7 @@ typedef struct aeron_congestion_control_strategy_stct aeron_congestion_control_s
 /**
  * Cubic congestion control settings. A value set here wins over its environment variable; while it is unset, the
  * getter and each new Cubic strategy read the environment variable.
+ * An invalid initial RTT variable reads as the default through the getter, but still fails strategy creation.
  */
 int aeron_driver_context_set_cubic_congestion_control_measure_rtt(aeron_driver_context_t *context, bool value);
 bool aeron_driver_context_get_cubic_congestion_control_measure_rtt(aeron_driver_context_t *context);

@@ -43,8 +43,20 @@ stored, and a `NULL` supplier can be set back. The existing
 the same setters) still passes.
 
 Linux x86-64, GCC, Debug, 2026-09-28: `driver_context_config_test` 20/20,
-`aeron_test_loss_generators_test` 39/39. Build and run as in
-[05](05-cubic-congestion-control-setters.md#reproduce).
+`aeron_test_loss_generators_test` 39/39.
+
+## Reproduce
+
+```sh
+cmake -S . -B build-c-tests -DCMAKE_BUILD_TYPE=Debug -DAERON_TESTS=ON \
+  -DAERON_SYSTEM_TESTS=OFF -DAERON_BUILD_SAMPLES=OFF -DBUILD_AERON_ARCHIVE_API=OFF
+cmake --build build-c-tests --target driver_context_config_test aeron_test_loss_generators_test
+LD_LIBRARY_PATH=$PWD/build-c-tests/lib ctest --test-dir build-c-tests \
+  -R '^(driver_context_config_test|aeron_test_loss_generators_test)$' --output-on-failure
+```
+
+`LD_LIBRARY_PATH` takes precedence over the binaries' `RUNPATH`; on a host with
+an older `libaeron_driver.so` on that path, point it at the build first.
 
 ## Upstream candidate
 
