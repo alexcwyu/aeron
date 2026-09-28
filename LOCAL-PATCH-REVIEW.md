@@ -112,3 +112,4 @@ included.
 | 5 | Cubic congestion control (`measure_rtt`, `initial_rtt_ns`, `tcp_mode`) | `aeronmd.h` | `driver_context_config_test`, `congestion_control_test` | yes | [Cubic](docs/patches/05-cubic-congestion-control-setters.md) |
 | 6 | Conductor UDP channel transport bindings | `aeronmd.h` | `driver_context_config_test` | yes | [Conductor bindings](docs/patches/06-conductor-udp-channel-transport-bindings-setter.md) |
 | 7 | Send and receive channel loss suppliers (moved from the internal header, plus getters) | `aeronmd.h` | `driver_context_config_test`, `aeron_test_loss_generators_test` | yes | [Loss suppliers](docs/patches/07-channel-loss-supplier-public-api.md) |
+| 8 | Unicast and multicast flow control retransmit receiver window multiples (`rrwm`) | `aeronmd.h` | `driver_context_config_test`, `flow_control_test` | yes | [rrwm](docs/patches/08-flow-control-rrwm-setters.md) |

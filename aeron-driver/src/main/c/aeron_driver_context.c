@@ -2122,6 +2122,54 @@ aeron_flow_control_strategy_supplier_func_t aeron_driver_context_get_unicast_flo
         aeron_flow_control_strategy_supplier_load(AERON_UNICAST_FLOWCONTROL_SUPPLIER_DEFAULT);
 }
 
+int aeron_driver_context_set_unicast_flow_control_rrwm(aeron_driver_context_t *context, size_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    if (value < 1 || value > INT32_MAX)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "unicast_flow_control_rrwm must be in the range 1 to %" PRId32 ": %" PRIu64,
+            INT32_MAX,
+            (uint64_t)value);
+        return -1;
+    }
+
+    context->unicast_flow_control_rrwm = value;
+    return 0;
+}
+
+size_t aeron_driver_context_get_unicast_flow_control_rrwm(aeron_driver_context_t *context)
+{
+    return NULL != context ?
+        context->unicast_flow_control_rrwm : AERON_UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE;
+}
+
+int aeron_driver_context_set_multicast_flow_control_rrwm(aeron_driver_context_t *context, size_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    if (value < 1 || value > INT32_MAX)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "multicast_flow_control_rrwm must be in the range 1 to %" PRId32 ": %" PRIu64,
+            INT32_MAX,
+            (uint64_t)value);
+        return -1;
+    }
+
+    context->multicast_flow_control_rrwm = value;
+    return 0;
+}
+
+size_t aeron_driver_context_get_multicast_flow_control_rrwm(aeron_driver_context_t *context)
+{
+    return NULL != context ?
+        context->multicast_flow_control_rrwm : AERON_MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE;
+}
+
 int aeron_driver_context_set_image_liveness_timeout_ns(aeron_driver_context_t *context, uint64_t value)
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);

@@ -318,6 +318,20 @@ aeron_flow_control_strategy_supplier_func_t aeron_driver_context_get_unicast_flo
     aeron_driver_context_t *context);
 
 /**
+ * Multiple of the receiver window that limits how much data the unicast flow control strategy retransmits at once.
+ * Must be in the range 1 to INT32_MAX; the default is 16.
+ */
+int aeron_driver_context_set_unicast_flow_control_rrwm(aeron_driver_context_t *context, size_t value);
+size_t aeron_driver_context_get_unicast_flow_control_rrwm(aeron_driver_context_t *context);
+
+/**
+ * Multiple of the receiver window that limits how much data the multicast flow control strategies retransmit at once,
+ * unless a channel sets its own `rrwm`. Must be in the range 1 to INT32_MAX; the default is 4.
+ */
+int aeron_driver_context_set_multicast_flow_control_rrwm(aeron_driver_context_t *context, size_t value);
+size_t aeron_driver_context_get_multicast_flow_control_rrwm(aeron_driver_context_t *context);
+
+/**
  * Image liveness timeout in nanoseconds
  */
 #define AERON_IMAGE_LIVENESS_TIMEOUT_ENV_VAR "AERON_IMAGE_LIVENESS_TIMEOUT"

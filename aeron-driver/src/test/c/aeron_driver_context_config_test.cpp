@@ -500,3 +500,30 @@ TEST_F(DriverContextConfigTest, shouldSetChannelLossSuppliers)
 
     aeron_driver_context_close(context);
 }
+
+TEST_F(DriverContextConfigTest, shouldSetFlowControlRetransmitReceiverWindowMultiples)
+{
+    aeron_driver_context_t *context;
+
+    ASSERT_EQ(0, aeron_driver_context_init(&context)) << aeron_errmsg();
+    EXPECT_EQ(
+        (size_t)AERON_UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE,
+        aeron_driver_context_get_unicast_flow_control_rrwm(context));
+    EXPECT_EQ(
+        (size_t)AERON_MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE,
+        aeron_driver_context_get_multicast_flow_control_rrwm(context));
+
+    EXPECT_EQ(0, aeron_driver_context_set_unicast_flow_control_rrwm(context, 8));
+    EXPECT_EQ(0, aeron_driver_context_set_multicast_flow_control_rrwm(context, 2));
+    EXPECT_EQ((size_t)8, aeron_driver_context_get_unicast_flow_control_rrwm(context));
+    EXPECT_EQ((size_t)2, aeron_driver_context_get_multicast_flow_control_rrwm(context));
+
+    EXPECT_EQ(-1, aeron_driver_context_set_unicast_flow_control_rrwm(context, 0));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_EQ(-1, aeron_driver_context_set_multicast_flow_control_rrwm(context, (size_t)INT32_MAX + 1));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_EQ((size_t)8, aeron_driver_context_get_unicast_flow_control_rrwm(context));
+    EXPECT_EQ((size_t)2, aeron_driver_context_get_multicast_flow_control_rrwm(context));
+
+    aeron_driver_context_close(context);
+}
