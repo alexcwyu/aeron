@@ -755,6 +755,15 @@ int aeron_driver_context_set_udp_channel_transport_bindings(
 aeron_udp_channel_transport_bindings_t *aeron_driver_context_get_udp_channel_transport_bindings(
     aeron_driver_context_t *context);
 
+/**
+ * Bindings for the conductor's own UDP channel transports, which the driver name resolver uses. Init loads them from
+ * AERON_CONDUCTOR_UDP_CHANNEL_TRANSPORT_BINDINGS_MEDIA_ENV_VAR; a value set here replaces them.
+ */
+int aeron_driver_context_set_conductor_udp_channel_transport_bindings(
+    aeron_driver_context_t *context, aeron_udp_channel_transport_bindings_t *value);
+aeron_udp_channel_transport_bindings_t *aeron_driver_context_get_conductor_udp_channel_transport_bindings(
+    aeron_driver_context_t *context);
+
 #define AERON_UDP_CHANNEL_OUTGOING_INTERCEPTORS_ENV_VAR "AERON_UDP_CHANNEL_OUTGOING_INTERCEPTORS"
 #define AERON_UDP_CHANNEL_INCOMING_INTERCEPTORS_ENV_VAR "AERON_UDP_CHANNEL_INCOMING_INTERCEPTORS"
 

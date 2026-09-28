@@ -110,3 +110,4 @@ included.
 | Order | Family | Public header | Test | Upstream candidate | Detail |
 |---|---|---|---|---|---|
 | 5 | Cubic congestion control (`measure_rtt`, `initial_rtt_ns`, `tcp_mode`) | `aeronmd.h` | `driver_context_config_test`, `congestion_control_test` | yes | [Cubic](docs/patches/05-cubic-congestion-control-setters.md) |
+| 6 | Conductor UDP channel transport bindings | `aeronmd.h` | `driver_context_config_test` | yes | [Conductor bindings](docs/patches/06-conductor-udp-channel-transport-bindings-setter.md) |

@@ -2883,6 +2883,23 @@ aeron_udp_channel_transport_bindings_t *aeron_driver_context_get_udp_channel_tra
         aeron_udp_channel_transport_bindings_load_media(AERON_UDP_CHANNEL_TRANSPORT_BINDINGS_MEDIA_DEFAULT);
 }
 
+int aeron_driver_context_set_conductor_udp_channel_transport_bindings(
+    aeron_driver_context_t *context, aeron_udp_channel_transport_bindings_t *value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->conductor_udp_channel_transport_bindings = value;
+    return 0;
+}
+
+aeron_udp_channel_transport_bindings_t *aeron_driver_context_get_conductor_udp_channel_transport_bindings(
+    aeron_driver_context_t *context)
+{
+    return NULL != context ?
+        context->conductor_udp_channel_transport_bindings :
+        aeron_udp_channel_transport_bindings_load_media(AERON_UDP_CHANNEL_TRANSPORT_BINDINGS_MEDIA_DEFAULT);
+}
+
 int aeron_driver_context_set_udp_channel_outgoing_interceptors(
     aeron_driver_context_t *context, aeron_udp_channel_interceptor_bindings_t *value)
 {

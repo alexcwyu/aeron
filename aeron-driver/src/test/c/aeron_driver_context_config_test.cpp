@@ -445,3 +445,23 @@ TEST_F(DriverContextConfigTest, shouldReadCubicMeasureRttAndTcpModeLazilyAndLetT
 
     aeron_driver_context_close(context);
 }
+
+TEST_F(DriverContextConfigTest, shouldSetConductorUdpChannelTransportBindingsSeparately)
+{
+    aeron_driver_context_t *context;
+
+    ASSERT_EQ(0, aeron_driver_context_init(&context)) << aeron_errmsg();
+    aeron_udp_channel_transport_bindings_t *default_bindings = aeron_udp_channel_transport_bindings_load_media("default");
+    ASSERT_NE(nullptr, default_bindings);
+    EXPECT_EQ(default_bindings, aeron_driver_context_get_conductor_udp_channel_transport_bindings(context));
+
+    aeron_udp_channel_transport_bindings_t conductor_bindings = *default_bindings;
+    conductor_bindings.meta_info.name = "conductor-only";
+    EXPECT_EQ(0, aeron_driver_context_set_conductor_udp_channel_transport_bindings(context, &conductor_bindings));
+    EXPECT_EQ(&conductor_bindings, aeron_driver_context_get_conductor_udp_channel_transport_bindings(context));
+    EXPECT_EQ(default_bindings, aeron_driver_context_get_udp_channel_transport_bindings(context));
+
+    EXPECT_EQ(-1, aeron_driver_context_set_conductor_udp_channel_transport_bindings(nullptr, &conductor_bindings));
+
+    aeron_driver_context_close(context);
+}
