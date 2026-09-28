@@ -66,6 +66,10 @@
 #define AERON_COUNTERS_VALUES_BUFFER_LENGTH_MAX UINT32_C(500 * 1024 * 1024)
 #define AERON_ERROR_BUFFER_LENGTH_DEFAULT (4 * 1024 * 1024)
 
+#define AERON_CUBICCONGESTIONCONTROL_MEASURERTT_DEFAULT (false)
+#define AERON_CUBICCONGESTIONCONTROL_INITIALRTT_DEFAULT (100 * 1000LL)
+#define AERON_CUBICCONGESTIONCONTROL_TCPMODE_DEFAULT (false)
+
 typedef bool (*aeron_end_of_life_resource_free_t)(void *resource);
 
 typedef struct aeron_end_of_life_resource_stct
@@ -230,6 +234,13 @@ typedef struct aeron_driver_context_stct
     uint32_t network_publication_max_messages_per_send;     /* aeron.network.publication.max.messages.per.send = 4 */
     uint32_t resource_free_limit;                           /* aeron.driver.resource.free.limit = 1 */
     uint32_t max_resend;                                    /* aeron.max.resend = 16 */
+
+    bool cubic_congestion_control_measure_rtt_is_set;
+    bool cubic_congestion_control_measure_rtt;              /* aeron.CubicCongestionControl.measureRtt = false */
+    bool cubic_congestion_control_initial_rtt_ns_is_set;
+    uint64_t cubic_congestion_control_initial_rtt_ns;       /* aeron.CubicCongestionControl.initialRtt = 100us */
+    bool cubic_congestion_control_tcp_mode_is_set;
+    bool cubic_congestion_control_tcp_mode;                 /* aeron.CubicCongestionControl.tcpMode = false */
 
     int32_t conductor_cpu_affinity_no;                      /* aeron.conductor.cpu.affinity = -1 */
     int32_t receiver_cpu_affinity_no;                       /* aeron.receiver.cpu.affinity = -1 */

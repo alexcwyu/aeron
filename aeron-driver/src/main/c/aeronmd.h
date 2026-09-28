@@ -358,6 +358,19 @@ typedef struct aeron_congestion_control_strategy_stct aeron_congestion_control_s
  */
 #define AERON_CUBICCONGESTIONCONTROL_TCPMODE_ENV_VAR "AERON_CUBICCONGESTIONCONTROL_TCPMODE"
 
+/**
+ * Cubic congestion control settings. A value set here wins over its environment variable; while it is unset, the
+ * getter and each new Cubic strategy read the environment variable.
+ */
+int aeron_driver_context_set_cubic_congestion_control_measure_rtt(aeron_driver_context_t *context, bool value);
+bool aeron_driver_context_get_cubic_congestion_control_measure_rtt(aeron_driver_context_t *context);
+
+int aeron_driver_context_set_cubic_congestion_control_initial_rtt_ns(aeron_driver_context_t *context, uint64_t value);
+uint64_t aeron_driver_context_get_cubic_congestion_control_initial_rtt_ns(aeron_driver_context_t *context);
+
+int aeron_driver_context_set_cubic_congestion_control_tcp_mode(aeron_driver_context_t *context, bool value);
+bool aeron_driver_context_get_cubic_congestion_control_tcp_mode(aeron_driver_context_t *context);
+
 typedef struct aeron_counters_manager_stct aeron_counters_manager_t;
 struct sockaddr_storage;
 

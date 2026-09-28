@@ -30,7 +30,6 @@
 #include "aeron_position.h"
 #include "media/aeron_udp_channel.h"
 
-#define AERON_CUBICCONGESTIONCONTROL_INITIALRTT_DEFAULT (100 * 1000LL)
 #define AERON_CUBICCONGESTIONCONTROL_SECOND_IN_NS (1 * 1000 * 1000 * 1000LL)
 
 #define AERON_CUBICCONGESTIONCONTROL_INITCWND (10)
@@ -398,15 +397,22 @@ int aeron_cubic_congestion_control_strategy_supplier(
     aeron_cubic_congestion_control_strategy_state_t *state = _strategy->state;
 
     // Config values
-    state->tcp_mode = aeron_parse_bool(getenv(AERON_CUBICCONGESTIONCONTROL_TCPMODE_ENV_VAR), false);
-    state->measure_rtt = aeron_parse_bool(getenv(AERON_CUBICCONGESTIONCONTROL_MEASURERTT_ENV_VAR), false);
+    state->tcp_mode = aeron_driver_context_get_cubic_congestion_control_tcp_mode(context);
+    state->measure_rtt = aeron_driver_context_get_cubic_congestion_control_measure_rtt(context);
     state->initial_rtt_ns = AERON_CUBICCONGESTIONCONTROL_INITIALRTT_DEFAULT;
-    char *const rtt_ns = getenv(AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR);
-    if (NULL != rtt_ns)
+    if (context->cubic_congestion_control_initial_rtt_ns_is_set)
     {
-        if (-1 == aeron_parse_duration_ns(rtt_ns, &state->initial_rtt_ns))
+        state->initial_rtt_ns = context->cubic_congestion_control_initial_rtt_ns;
+    }
+    else
+    {
+        char *const rtt_ns = getenv(AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR);
+        if (NULL != rtt_ns)
         {
-            goto error_cleanup;
+            if (-1 == aeron_parse_duration_ns(rtt_ns, &state->initial_rtt_ns))
+            {
+                goto error_cleanup;
+            }
         }
     }
 

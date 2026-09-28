@@ -43,6 +43,9 @@ protected:
         aeron_env_unset(AERON_LOW_FILE_STORE_WARNING_THRESHOLD_ENV_VAR);
         aeron_env_unset(AERON_NAK_UNICAST_DELAY_ENV_VAR);
         aeron_env_unset(AERON_NAK_UNICAST_RETRY_DELAY_RATIO_ENV_VAR);
+        aeron_env_unset(AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR);
+        aeron_env_unset(AERON_CUBICCONGESTIONCONTROL_MEASURERTT_ENV_VAR);
+        aeron_env_unset(AERON_CUBICCONGESTIONCONTROL_TCPMODE_ENV_VAR);
     }
 };
 
@@ -398,6 +401,47 @@ TEST_F(DriverContextConfigTest, shouldNotChangeAffinityWhenUnset)
     EXPECT_EQ(-1, aeron_driver_context_get_sender_cpu_affinity(context));
     EXPECT_EQ(-1, aeron_driver_context_get_receiver_cpu_affinity(context));
     EXPECT_EQ(-1, aeron_driver_context_get_native_resource_agent_cpu_affinity(context));
+
+    aeron_driver_context_close(context);
+}
+
+TEST_F(DriverContextConfigTest, shouldReadCubicInitialRttLazilyAndLetTheSetterWin)
+{
+    aeron_driver_context_t *context;
+
+    aeron_env_unset(AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR);
+    ASSERT_EQ(0, aeron_driver_context_init(&context)) << aeron_errmsg();
+    EXPECT_EQ(
+        (uint64_t)AERON_CUBICCONGESTIONCONTROL_INITIALRTT_DEFAULT,
+        aeron_driver_context_get_cubic_congestion_control_initial_rtt_ns(context));
+
+    aeron_env_set(AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR, "250us");
+    EXPECT_EQ(UINT64_C(250000), aeron_driver_context_get_cubic_congestion_control_initial_rtt_ns(context));
+
+    EXPECT_EQ(0, aeron_driver_context_set_cubic_congestion_control_initial_rtt_ns(context, UINT64_C(500000)));
+    EXPECT_EQ(UINT64_C(500000), aeron_driver_context_get_cubic_congestion_control_initial_rtt_ns(context));
+
+    aeron_env_unset(AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR);
+    aeron_driver_context_close(context);
+}
+
+TEST_F(DriverContextConfigTest, shouldReadCubicMeasureRttAndTcpModeLazilyAndLetTheSetterWin)
+{
+    aeron_driver_context_t *context;
+
+    ASSERT_EQ(0, aeron_driver_context_init(&context)) << aeron_errmsg();
+    EXPECT_FALSE(aeron_driver_context_get_cubic_congestion_control_measure_rtt(context));
+    EXPECT_FALSE(aeron_driver_context_get_cubic_congestion_control_tcp_mode(context));
+
+    aeron_env_set(AERON_CUBICCONGESTIONCONTROL_MEASURERTT_ENV_VAR, "true");
+    aeron_env_set(AERON_CUBICCONGESTIONCONTROL_TCPMODE_ENV_VAR, "true");
+    EXPECT_TRUE(aeron_driver_context_get_cubic_congestion_control_measure_rtt(context));
+    EXPECT_TRUE(aeron_driver_context_get_cubic_congestion_control_tcp_mode(context));
+
+    EXPECT_EQ(0, aeron_driver_context_set_cubic_congestion_control_measure_rtt(context, false));
+    EXPECT_EQ(0, aeron_driver_context_set_cubic_congestion_control_tcp_mode(context, false));
+    EXPECT_FALSE(aeron_driver_context_get_cubic_congestion_control_measure_rtt(context));
+    EXPECT_FALSE(aeron_driver_context_get_cubic_congestion_control_tcp_mode(context));
 
     aeron_driver_context_close(context);
 }

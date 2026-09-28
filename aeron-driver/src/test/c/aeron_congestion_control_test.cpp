@@ -446,3 +446,77 @@ TEST_F(CongestionControlTest, cubicCongestionControlStrategyConfiguration)
     EXPECT_EQ(AERON_COUNTER_RECORD_RECLAIMED, get_counter_state(rtt_indicator_counter_id));
     EXPECT_EQ(AERON_COUNTER_RECORD_RECLAIMED, get_counter_state(window_counter_id));
 }
+
+TEST_F(CongestionControlTest, cubicCongestionControlStrategyConfigurationFromSetters)
+{
+    ASSERT_EQ(0, aeron_driver_context_set_cubic_congestion_control_tcp_mode(m_context, true));
+    ASSERT_EQ(0, aeron_driver_context_set_cubic_congestion_control_measure_rtt(m_context, true));
+    ASSERT_EQ(0, aeron_driver_context_set_cubic_congestion_control_initial_rtt_ns(m_context, 1000000000LL));
+
+    const char *channel = "aeron:udp?endpoint=192.168.0.1:9999\0";
+    aeron_congestion_control_strategy_t *congestion_control_strategy = nullptr;
+    aeron_udp_channel_t *udp_channel = parse_udp_channel(channel);
+
+    const int stream_id = 42;
+    const int session_id = 5;
+    const int registration_id = 11;
+    const int sender_mtu_length = 1408;
+    const int term_length = 8096;
+    const int result = aeron_cubic_congestion_control_strategy_supplier(
+        &congestion_control_strategy,
+        udp_channel,
+        stream_id,
+        session_id,
+        registration_id,
+        term_length,
+        sender_mtu_length,
+        nullptr,
+        nullptr,
+        m_context,
+        &m_counters_manager);
+
+    EXPECT_EQ(result, 0);
+    EXPECT_NE(nullptr, congestion_control_strategy);
+    void *const state = congestion_control_strategy->state;
+    EXPECT_NE(nullptr, state);
+    EXPECT_NE(nullptr, congestion_control_strategy->on_rttm_sent);
+    EXPECT_NE(nullptr, congestion_control_strategy->on_rttm);
+    EXPECT_NE(nullptr, congestion_control_strategy->should_measure_rtt);
+    EXPECT_NE(nullptr, congestion_control_strategy->initial_window_length);
+    EXPECT_NE(nullptr, congestion_control_strategy->on_track_rebuild);
+    EXPECT_NE(nullptr, congestion_control_strategy->fini);
+
+    const int32_t rtt_indicator_counter_id = find_counter_by_label_prefix(
+        &m_counters_manager,
+        AERON_COUNTER_PER_IMAGE_TYPE_ID,
+        AERON_CUBICCONGESTIONCONTROL_RTT_INDICATOR_COUNTER_NAME);
+    EXPECT_EQ(AERON_COUNTER_RECORD_ALLOCATED, get_counter_state(rtt_indicator_counter_id));
+    EXPECT_EQ(0, aeron_counter_get_plain(aeron_counters_manager_addr(&m_counters_manager, rtt_indicator_counter_id)));
+
+    const int32_t window_counter_id = find_counter_by_label_prefix(
+        &m_counters_manager,
+        AERON_COUNTER_PER_IMAGE_TYPE_ID,
+        AERON_CUBICCONGESTIONCONTROL_WINDOW_INDICATOR_COUNTER_NAME);
+    EXPECT_EQ(AERON_COUNTER_RECORD_ALLOCATED, get_counter_state(window_counter_id));
+    EXPECT_EQ(
+        sender_mtu_length * 2,
+        aeron_counter_get_plain(aeron_counters_manager_addr(&m_counters_manager, window_counter_id)));
+
+    EXPECT_TRUE(congestion_control_strategy->should_measure_rtt(state, 10000000000LL));
+
+    congestion_control_strategy->on_rttm_sent(state, 10000000000LL);
+    EXPECT_FALSE(congestion_control_strategy->should_measure_rtt(state, 10000000000LL));
+
+    congestion_control_strategy->on_rttm(state, 20000000000LL, 555LL, nullptr);
+    EXPECT_EQ(555LL, aeron_counter_get_plain(aeron_counters_manager_addr(&m_counters_manager, rtt_indicator_counter_id)));
+
+    // the 1s initial RTT keeps the 4s RTT timeout; the 100us default would allow a measurement here
+    EXPECT_FALSE(congestion_control_strategy->should_measure_rtt(state, 22000000000LL));
+    EXPECT_TRUE(congestion_control_strategy->should_measure_rtt(state, 30000000000LL));
+
+    congestion_control_strategy->fini(congestion_control_strategy);
+
+    // assert that counters were freed
+    EXPECT_EQ(AERON_COUNTER_RECORD_RECLAIMED, get_counter_state(rtt_indicator_counter_id));
+    EXPECT_EQ(AERON_COUNTER_RECORD_RECLAIMED, get_counter_state(window_counter_id));
+}

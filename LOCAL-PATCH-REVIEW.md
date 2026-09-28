@@ -95,3 +95,18 @@ Redundancy check against upstream `1.53.3` (all four fixes still required):
 
 No fix was dropped. `patch/1.52.2-consolidated` (tip `c456fa85c7`) is
 unchanged by this rebase.
+
+## Public setters for C-only settings (1.53.3-patch.2, 2026-09-28)
+
+`1.53.3-patch.2` is `1.53.3-patch.1` plus public set/get pairs for the C
+settings that had none. An inventory of every `AERON_*` environment variable
+the driver, client and archive-client C libraries define, and of the
+`aeron_driver_context_t` fields, found them. One commit per setting family,
+each with its own `docs/patches/` entry; a setter always wins over the
+environment variable, and a variable that is read lazily today is still read
+lazily. No benchmark-driven proposal was approved for this tag, so none is
+included.
+
+| Order | Family | Public header | Test | Upstream candidate | Detail |
+|---|---|---|---|---|---|
+| 5 | Cubic congestion control (`measure_rtt`, `initial_rtt_ns`, `tcp_mode`) | `aeronmd.h` | `driver_context_config_test`, `congestion_control_test` | yes | [Cubic](docs/patches/05-cubic-congestion-control-setters.md) |

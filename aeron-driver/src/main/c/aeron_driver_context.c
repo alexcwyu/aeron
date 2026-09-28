@@ -533,6 +533,12 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->cpuset_warnings_as_errors = AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT;
     _context->enable_experimental_features = AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT;
     _context->stream_session_limit = AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT;
+    _context->cubic_congestion_control_measure_rtt_is_set = false;
+    _context->cubic_congestion_control_measure_rtt = AERON_CUBICCONGESTIONCONTROL_MEASURERTT_DEFAULT;
+    _context->cubic_congestion_control_initial_rtt_ns_is_set = false;
+    _context->cubic_congestion_control_initial_rtt_ns = AERON_CUBICCONGESTIONCONTROL_INITIALRTT_DEFAULT;
+    _context->cubic_congestion_control_tcp_mode_is_set = false;
+    _context->cubic_congestion_control_tcp_mode = AERON_CUBICCONGESTIONCONTROL_TCPMODE_DEFAULT;
 
     char *value = NULL;
 
@@ -2157,6 +2163,72 @@ aeron_congestion_control_strategy_supplier_func_t aeron_driver_context_get_conge
 {
     return NULL != context ? context->congestion_control_supplier_func :
         aeron_congestion_control_strategy_supplier_load(AERON_CONGESTIONCONTROL_SUPPLIER_DEFAULT);
+}
+
+int aeron_driver_context_set_cubic_congestion_control_measure_rtt(aeron_driver_context_t *context, bool value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->cubic_congestion_control_measure_rtt = value;
+    context->cubic_congestion_control_measure_rtt_is_set = true;
+    return 0;
+}
+
+bool aeron_driver_context_get_cubic_congestion_control_measure_rtt(aeron_driver_context_t *context)
+{
+    if (NULL != context && context->cubic_congestion_control_measure_rtt_is_set)
+    {
+        return context->cubic_congestion_control_measure_rtt;
+    }
+
+    return aeron_parse_bool(
+        getenv(AERON_CUBICCONGESTIONCONTROL_MEASURERTT_ENV_VAR), AERON_CUBICCONGESTIONCONTROL_MEASURERTT_DEFAULT);
+}
+
+int aeron_driver_context_set_cubic_congestion_control_initial_rtt_ns(aeron_driver_context_t *context, uint64_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->cubic_congestion_control_initial_rtt_ns = value;
+    context->cubic_congestion_control_initial_rtt_ns_is_set = true;
+    return 0;
+}
+
+uint64_t aeron_driver_context_get_cubic_congestion_control_initial_rtt_ns(aeron_driver_context_t *context)
+{
+    if (NULL != context && context->cubic_congestion_control_initial_rtt_ns_is_set)
+    {
+        return context->cubic_congestion_control_initial_rtt_ns;
+    }
+
+    uint64_t value = AERON_CUBICCONGESTIONCONTROL_INITIALRTT_DEFAULT;
+    const char *text = getenv(AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR);
+    if (NULL != text && -1 == aeron_parse_duration_ns(text, &value))
+    {
+        value = AERON_CUBICCONGESTIONCONTROL_INITIALRTT_DEFAULT;
+    }
+
+    return value;
+}
+
+int aeron_driver_context_set_cubic_congestion_control_tcp_mode(aeron_driver_context_t *context, bool value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->cubic_congestion_control_tcp_mode = value;
+    context->cubic_congestion_control_tcp_mode_is_set = true;
+    return 0;
+}
+
+bool aeron_driver_context_get_cubic_congestion_control_tcp_mode(aeron_driver_context_t *context)
+{
+    if (NULL != context && context->cubic_congestion_control_tcp_mode_is_set)
+    {
+        return context->cubic_congestion_control_tcp_mode;
+    }
+
+    return aeron_parse_bool(
+        getenv(AERON_CUBICCONGESTIONCONTROL_TCPMODE_ENV_VAR), AERON_CUBICCONGESTIONCONTROL_TCPMODE_DEFAULT);
 }
 
 int aeron_driver_context_set_loss_report_buffer_length(aeron_driver_context_t *context, size_t value)
