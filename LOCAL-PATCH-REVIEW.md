@@ -148,3 +148,45 @@ client and archive-client C libraries at `1.53.3-patch.1`:
 A comparison of the `aeron_driver_context_t` fields against the public setters
 added the two families that have no environment variable in C: the loss
 suppliers (07) and the rrwm pair (08).
+
+## Patch-set hygiene follow-up (2026-10-01)
+
+Follow-up to review item W2-08 of the 0.3-to-0.5.1 adversarial appendix
+(`docs/review/20260930-0.3-to-0.5.1-adversarial-review-appendix.md`), on
+`patch/1.53.3-consolidated` over `1.53.3-patch.2` (`2b8076c22d`). Four
+hygiene items, one commit per family; no behaviour the patch set claims is
+weakened.
+
+1. Sleeping idle strategy fix (`bfd722e44f`) gains the regression it lacked:
+   `agent_test` (new client suite, three cases) rejects an invalid duration
+   with no allocation left behind and pins the success paths;
+   `aeron_idle_strategy_sleeping_init_args` gains the header declaration the
+   test needs. Entry: [Sleeping init
+   args](docs/patches/1.52.2-sleeping-idle-strategy-init-args.md).
+2. `aeron_driver_context_set_cubic_congestion_control_initial_rtt_ns` now
+   validates its range (rejecting 0 and values above `INT64_MAX / 4` with
+   `EINVAL`, the fourfold RTT-timeout multiple the strategy computes), with
+   the rejection asserted in `shouldReadCubicInitialRttLazilyAndLetTheSetterWin`.
+   The lazy env-var path is untouched.
+3. `aeron_driver_context_set_conductor_udp_channel_transport_bindings` now
+   rejects a `NULL` value with `EINVAL` (the name resolver dereferences the
+   conductor bindings); the loss-supplier setters now release the
+   debug-installed `clientd` through new per-side
+   `aeron_debug_channel_endpoint_configuration_release_{send,receive}_supplier`
+   helpers, so replacing a debug supplier no longer leaks its params, and a
+   caller-owned `clientd` is still never freed. The upstream data-path
+   bindings setter is deliberately left accepting `NULL` (it is upstream's
+   API and always holds a loaded value after init).
+4. The destination-commands patch entry no longer describes the
+   remove-by-id assignment bug as unfixed: upstream `aa03d702d0`, part of the
+   1.53.3 base, fixed it with its own regressions. The entry now records that
+   history.
+
+Fresh Linux x86-64 GCC ASan+UBSan+LeakSanitizer Debug build, 2026-10-01:
+`agent_test` 3/3, `driver_context_config_test` 22/22,
+`congestion_control_test` 13/13, `aeron_test_loss_generators_test` 39/39.
+Negative controls: restoring the upstream sleeping body fails the new
+invalid-args case; removing the RTT range check fails the EINVAL assertions;
+removing the NULL check fails the bindings test; removing the per-side
+release leaks the debug params under LeakSanitizer. The reproduce recipes are
+in each patch entry.
