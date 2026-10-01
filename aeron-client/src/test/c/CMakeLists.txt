@@ -45,6 +45,7 @@ if (AERON_UNIT_TESTS)
         AERON_DLOPEN_TEST_LIB_B_PATH="$<TARGET_FILE:aeron_dlopen_test_lib_b>")
 
     aeron_c_client_test(alloc_test aeron_alloc_test.cpp)
+    aeron_c_client_test(agent_test aeron_agent_test.cpp)
     aeron_c_client_test(array_to_ptr_hash_map_test collections/aeron_array_to_ptr_hash_map_test.cpp)
     aeron_c_client_test(int64_to_ptr_hash_map_test collections/aeron_int64_to_ptr_hash_map_test.cpp)
     aeron_c_client_test(int64_counter_map_test collections/aeron_int64_counter_map_test.cpp)

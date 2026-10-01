@@ -47,6 +47,8 @@ aeron_idle_strategy_t;
 
 void aeron_idle_strategy_sleeping_idle(void *state, int work_count);
 
+int aeron_idle_strategy_sleeping_init_args(void **state, const char *env_var, const char *init_args);
+
 void aeron_idle_strategy_yielding_idle(void *state, int work_count);
 
 void aeron_idle_strategy_busy_spinning_idle(void *state, int work_count);
