@@ -41,13 +41,21 @@ Parsing stays lazy, so an environment-only caller sees no change:
   an unparsable initial RTT reads as the default there, since a getter cannot
   fail.
 
+The initial RTT setter validates its range (added 2026-10-01): the strategy
+stores the value as `int64_t` and multiplies it by four for its RTT timeout,
+so `0` and values above `INT64_MAX / 4` are rejected with `-1` and `EINVAL`,
+leaving the stored value unchanged. The environment-variable path is
+untouched: it still accepts any `aeron_parse_duration_ns` result, including
+the saturated `LLONG_MAX` an oversized unit suffix produces.
+
 No hot-path code changes: the strategy reads the values once, at creation.
 
 ## Test
 
 - `DriverContextConfigTest.shouldReadCubicInitialRttLazilyAndLetTheSetterWin`:
   default with the variable unset, `250us` read after init, and a set 500 us
-  winning over the still-set variable.
+  winning over the still-set variable; `0` and `INT64_MAX / 4 + 1` rejected
+  with `EINVAL` without changing the stored value (added 2026-10-01).
 - `DriverContextConfigTest.shouldReadCubicMeasureRttAndTcpModeLazilyAndLetTheSetterWin`:
   the same for the two booleans.
 - `CongestionControlTest.cubicCongestionControlStrategyConfigurationFromSetters`:

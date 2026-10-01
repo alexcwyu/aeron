@@ -429,6 +429,14 @@ TEST_F(DriverContextConfigTest, shouldReadCubicInitialRttLazilyAndLetTheSetterWi
     EXPECT_EQ(0, aeron_driver_context_set_cubic_congestion_control_initial_rtt_ns(context, UINT64_C(500000)));
     EXPECT_EQ(UINT64_C(500000), aeron_driver_context_get_cubic_congestion_control_initial_rtt_ns(context));
 
+    EXPECT_EQ(-1, aeron_driver_context_set_cubic_congestion_control_initial_rtt_ns(context, 0));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_EQ(
+        -1,
+        aeron_driver_context_set_cubic_congestion_control_initial_rtt_ns(context, (uint64_t)(INT64_MAX / 4) + 1));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_EQ(UINT64_C(500000), aeron_driver_context_get_cubic_congestion_control_initial_rtt_ns(context));
+
     aeron_env_unset(AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR);
     aeron_driver_context_close(context);
 }

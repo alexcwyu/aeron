@@ -2237,6 +2237,17 @@ int aeron_driver_context_set_cubic_congestion_control_initial_rtt_ns(aeron_drive
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
+    /* the Cubic strategy stores the initial RTT as int64_t and multiplies it by 4 for its RTT timeout */
+    if (0 == value || value > (uint64_t)(INT64_MAX / 4))
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "cubic_congestion_control_initial_rtt_ns must be in the range 1 to %" PRId64 ": %" PRIu64,
+            INT64_MAX / 4,
+            value);
+        return -1;
+    }
+
     context->cubic_congestion_control_initial_rtt_ns = value;
     context->cubic_congestion_control_initial_rtt_ns_is_set = true;
     return 0;
