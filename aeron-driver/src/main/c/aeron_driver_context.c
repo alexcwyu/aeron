@@ -2946,7 +2946,9 @@ int aeron_driver_context_set_conductor_udp_channel_transport_bindings(
     aeron_driver_context_t *context, aeron_udp_channel_transport_bindings_t *value)
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, value);
 
+    /* the driver name resolver dereferences the conductor bindings; a NULL would crash data-path init */
     context->conductor_udp_channel_transport_bindings = value;
     return 0;
 }

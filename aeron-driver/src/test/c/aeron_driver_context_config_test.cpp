@@ -478,6 +478,9 @@ TEST_F(DriverContextConfigTest, shouldSetConductorUdpChannelTransportBindingsSep
     EXPECT_EQ(default_bindings, aeron_driver_context_get_udp_channel_transport_bindings(context));
 
     EXPECT_EQ(-1, aeron_driver_context_set_conductor_udp_channel_transport_bindings(nullptr, &conductor_bindings));
+    EXPECT_EQ(-1, aeron_driver_context_set_conductor_udp_channel_transport_bindings(context, nullptr));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_EQ(&conductor_bindings, aeron_driver_context_get_conductor_udp_channel_transport_bindings(context));
 
     aeron_driver_context_close(context);
 }
