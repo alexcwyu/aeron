@@ -25,6 +25,7 @@
 extern "C"
 {
 #include "aeron_driver_context.h"
+#include "media/aeron_debug_channel_endpoint_configuration.h"
 }
 
 using namespace aeron;
@@ -508,6 +509,36 @@ TEST_F(DriverContextConfigTest, shouldSetChannelLossSuppliers)
 
     EXPECT_EQ(0, aeron_driver_context_set_send_channel_loss_supplier(context, nullptr, nullptr));
     EXPECT_EQ(nullptr, aeron_driver_context_get_send_channel_loss_supplier(context));
+
+    aeron_driver_context_close(context);
+}
+
+TEST_F(DriverContextConfigTest, shouldReleaseDebugInstalledStateWhenReplacingChannelLossSuppliers)
+{
+    aeron_driver_context_t *context;
+    int send_clientd = 0;
+
+    ASSERT_EQ(0, aeron_driver_context_init(&context)) << aeron_errmsg();
+
+    // the debug install allocates a clientd the context owns; a replacement through the setter must release it
+    ASSERT_EQ(0, aeron_debug_channel_endpoint_configuration_install(context));
+    ASSERT_NE(nullptr, aeron_driver_context_get_send_channel_loss_supplier(context));
+    ASSERT_NE(nullptr, aeron_driver_context_get_send_channel_loss_supplier_clientd(context));
+    ASSERT_NE(nullptr, aeron_driver_context_get_receive_channel_loss_supplier(context));
+    ASSERT_NE(nullptr, aeron_driver_context_get_receive_channel_loss_supplier_clientd(context));
+
+    EXPECT_EQ(0, aeron_driver_context_set_send_channel_loss_supplier(
+        context, test_send_channel_loss_supplier, &send_clientd));
+    EXPECT_EQ(&send_clientd, aeron_driver_context_get_send_channel_loss_supplier_clientd(context));
+
+    EXPECT_EQ(0, aeron_driver_context_set_receive_channel_loss_supplier(
+        context, test_receive_channel_loss_supplier, nullptr));
+    EXPECT_EQ(nullptr, aeron_driver_context_get_receive_channel_loss_supplier_clientd(context));
+
+    // a second replacement must not free the caller-owned clientd (only the debug-installed one)
+    EXPECT_EQ(0, aeron_driver_context_set_send_channel_loss_supplier(
+        context, test_send_channel_loss_supplier, &send_clientd));
+    EXPECT_EQ(&send_clientd, aeron_driver_context_get_send_channel_loss_supplier_clientd(context));
 
     aeron_driver_context_close(context);
 }

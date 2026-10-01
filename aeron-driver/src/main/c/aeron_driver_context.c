@@ -3133,6 +3133,9 @@ int aeron_driver_context_set_send_channel_loss_supplier(
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
+    /* release the debug-installed state this context owns, so replacing it cannot leak */
+    aeron_debug_channel_endpoint_configuration_release_send_supplier(context);
+
     context->send_channel_loss_supplier_func = func;
     context->send_channel_loss_supplier_clientd = clientd;
     return 0;
@@ -3155,6 +3158,9 @@ int aeron_driver_context_set_receive_channel_loss_supplier(
     void *clientd)
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    /* release the debug-installed state this context owns, so replacing it cannot leak */
+    aeron_debug_channel_endpoint_configuration_release_receive_supplier(context);
 
     context->receive_channel_loss_supplier_func = func;
     context->receive_channel_loss_supplier_clientd = clientd;

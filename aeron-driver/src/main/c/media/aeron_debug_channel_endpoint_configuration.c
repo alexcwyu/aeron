@@ -123,6 +123,26 @@ static void aeron_debug_channel_endpoint_configuration_on_receive_channel(
     }
 }
 
+static void aeron_debug_channel_endpoint_configuration_release_send(aeron_driver_context_t *context)
+{
+    if (aeron_debug_channel_endpoint_configuration_on_send_channel == context->send_channel_loss_supplier_func)
+    {
+        aeron_free(context->send_channel_loss_supplier_clientd);
+        context->send_channel_loss_supplier_clientd = NULL;
+        context->send_channel_loss_supplier_func = NULL;
+    }
+}
+
+static void aeron_debug_channel_endpoint_configuration_release_receive(aeron_driver_context_t *context)
+{
+    if (aeron_debug_channel_endpoint_configuration_on_receive_channel == context->receive_channel_loss_supplier_func)
+    {
+        aeron_free(context->receive_channel_loss_supplier_clientd);
+        context->receive_channel_loss_supplier_clientd = NULL;
+        context->receive_channel_loss_supplier_func = NULL;
+    }
+}
+
 int aeron_debug_channel_endpoint_configuration_install(aeron_driver_context_t *context)
 {
     if (NULL == context)
@@ -178,17 +198,26 @@ void aeron_debug_channel_endpoint_configuration_cleanup(aeron_driver_context_t *
         return;
     }
 
-    if (aeron_debug_channel_endpoint_configuration_on_send_channel == context->send_channel_loss_supplier_func)
+    aeron_debug_channel_endpoint_configuration_release_send(context);
+    aeron_debug_channel_endpoint_configuration_release_receive(context);
+}
+
+void aeron_debug_channel_endpoint_configuration_release_send_supplier(aeron_driver_context_t *context)
+{
+    if (NULL == context)
     {
-        aeron_free(context->send_channel_loss_supplier_clientd);
-        context->send_channel_loss_supplier_clientd = NULL;
-        context->send_channel_loss_supplier_func = NULL;
+        return;
     }
 
-    if (aeron_debug_channel_endpoint_configuration_on_receive_channel == context->receive_channel_loss_supplier_func)
+    aeron_debug_channel_endpoint_configuration_release_send(context);
+}
+
+void aeron_debug_channel_endpoint_configuration_release_receive_supplier(aeron_driver_context_t *context)
+{
+    if (NULL == context)
     {
-        aeron_free(context->receive_channel_loss_supplier_clientd);
-        context->receive_channel_loss_supplier_clientd = NULL;
-        context->receive_channel_loss_supplier_func = NULL;
+        return;
     }
+
+    aeron_debug_channel_endpoint_configuration_release_receive(context);
 }

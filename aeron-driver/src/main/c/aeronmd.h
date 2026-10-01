@@ -814,6 +814,10 @@ typedef void (*aeron_receive_channel_loss_supplier_func_t)(
     void *clientd,
     struct aeron_receive_channel_endpoint_stct *endpoint);
 
+/**
+ * Setting a supplier releases the state aeron_debug_channel_endpoint_configuration_install installed on that side,
+ * which the context owns; a caller-supplied clientd stays owned by the caller.
+ */
 int aeron_driver_context_set_send_channel_loss_supplier(
     aeron_driver_context_t *context,
     aeron_send_channel_loss_supplier_func_t func,

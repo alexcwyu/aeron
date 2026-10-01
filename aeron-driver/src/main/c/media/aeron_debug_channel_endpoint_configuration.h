@@ -44,4 +44,18 @@ int aeron_debug_channel_endpoint_configuration_install(aeron_driver_context_t *c
  */
 void aeron_debug_channel_endpoint_configuration_cleanup(aeron_driver_context_t *context);
 
+/*
+ * Release only the send-side (or receive-side) debug supplier and its clientd, if that side still holds the
+ * one installed here. Called by aeron_driver_context_set_send_channel_loss_supplier when a replacement is set.
+ * Safe to call if install was never called.
+ */
+void aeron_debug_channel_endpoint_configuration_release_send_supplier(aeron_driver_context_t *context);
+
+/*
+ * Release only the receive-side debug supplier and its clientd, if that side still holds the one installed here.
+ * Called by aeron_driver_context_set_receive_channel_loss_supplier when a replacement is set.
+ * Safe to call if install was never called.
+ */
+void aeron_debug_channel_endpoint_configuration_release_receive_supplier(aeron_driver_context_t *context);
+
 #endif //AERON_DEBUG_CHANNEL_ENDPOINT_CONFIGURATION_H
