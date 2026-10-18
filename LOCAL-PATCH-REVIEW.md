@@ -190,3 +190,17 @@ invalid-args case; removing the RTT range check fails the EINVAL assertions;
 removing the NULL check fails the bindings test; removing the per-side
 release leaks the debug params under LeakSanitizer. The reproduce recipes are
 in each patch entry.
+
+## Loss-supplier double free (1.53.3-patch.4, 2026-10-19)
+
+Review of `1.53.3-patch.3` found that re-setting the installed debug
+loss-supplier pair through `aeron_driver_context_set_{send,receive}_channel_loss_supplier`
+freed the debug-installed `clientd` and then stored the freed pointer, so
+`aeron_driver_context_close` freed it again. Each setter now returns `0`
+without touching the context when the function and `clientd` already equal
+the installed pair ([Loss suppliers](docs/patches/07-channel-loss-supplier-public-api.md)).
+
+Linux x86-64 GCC ASan Debug, 2026-10-19: `driver_context_config_test` 23/23,
+`aeron_test_loss_generators_test` passed. Negative control: removing the guard
+fails the new `shouldPreserveOwnedDebugStateWhenResettingTheSameSupplierPair`
+with an AddressSanitizer double-free report.

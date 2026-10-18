@@ -15,6 +15,7 @@
  */
 
 #include <functional>
+#include <memory>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -511,6 +512,28 @@ TEST_F(DriverContextConfigTest, shouldSetChannelLossSuppliers)
     EXPECT_EQ(nullptr, aeron_driver_context_get_send_channel_loss_supplier(context));
 
     aeron_driver_context_close(context);
+}
+
+TEST_F(DriverContextConfigTest, shouldPreserveOwnedDebugStateWhenResettingTheSameSupplierPair)
+{
+    aeron_driver_context_t *raw = nullptr;
+    ASSERT_EQ(0, aeron_driver_context_init(&raw)) << aeron_errmsg();
+    std::unique_ptr<aeron_driver_context_t, decltype(&aeron_driver_context_close)> context(raw, aeron_driver_context_close);
+    ASSERT_EQ(0, aeron_debug_channel_endpoint_configuration_install(raw));
+    const auto send = aeron_driver_context_get_send_channel_loss_supplier(raw);
+    void *send_clientd = aeron_driver_context_get_send_channel_loss_supplier_clientd(raw);
+    const auto receive = aeron_driver_context_get_receive_channel_loss_supplier(raw);
+    void *receive_clientd = aeron_driver_context_get_receive_channel_loss_supplier_clientd(raw);
+    ASSERT_NE(nullptr, send_clientd);
+    ASSERT_NE(nullptr, receive_clientd);
+    for (int i = 0; i < 3; ++i)
+    {
+        ASSERT_EQ(0, aeron_driver_context_set_send_channel_loss_supplier(raw, send, send_clientd));
+        ASSERT_EQ(0, aeron_driver_context_set_receive_channel_loss_supplier(raw, receive, receive_clientd));
+        EXPECT_EQ(send_clientd, aeron_driver_context_get_send_channel_loss_supplier_clientd(raw));
+        EXPECT_EQ(receive_clientd, aeron_driver_context_get_receive_channel_loss_supplier_clientd(raw));
+    }
+    // ASan checks that both owned pairs remain live until context teardown and are freed once.
 }
 
 TEST_F(DriverContextConfigTest, shouldReleaseDebugInstalledStateWhenReplacingChannelLossSuppliers)

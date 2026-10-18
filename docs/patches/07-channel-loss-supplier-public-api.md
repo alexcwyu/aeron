@@ -43,6 +43,12 @@ first, which frees the debug `clientd` only when the current supplier is the
 debug one, and does nothing otherwise — a caller-owned `clientd` is never
 freed by the context.
 
+`1.53.3-patch.4` (2026-10-19): each setter returns `0` without touching the
+context when the function and `clientd` already equal the installed pair.
+Without that, re-setting the installed debug pair (read back through the
+getters) freed its `clientd` and then stored the freed pointer, so context
+close freed it a second time.
+
 ## Test
 
 `DriverContextConfigTest.shouldSetChannelLossSuppliers`: both suppliers and
@@ -55,6 +61,10 @@ the same setters) still passes.
 the setter leaves the new function and `clientd` in place, a second replacement
 does not free the caller-owned `clientd`, and the context closes cleanly —
 under ASan/LeakSanitizer the pre-fix leak would be reported at exit.
+`DriverContextConfigTest.shouldPreserveOwnedDebugStateWhenResettingTheSameSupplierPair`
+(added 2026-10-19): after a debug install, re-setting each installed pair
+three times leaves both `clientd` pointers in place; AddressSanitizer reports
+the double free at context close when the guard is removed.
 
 Linux x86-64, GCC, Debug, 2026-09-28: `driver_context_config_test` 20/20,
 `aeron_test_loss_generators_test` 39/39. Hygiene update 2026-10-01: rerun on
