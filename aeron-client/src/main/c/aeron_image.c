@@ -743,8 +743,16 @@ bool aeron_image_is_closed(aeron_image_t *image)
 
 int aeron_image_reject(aeron_image_t *image, const char *reason)
 {
-    return aeron_subscription_reject_image(
-        image->subscription,
+    /* The close flag is acquire-loaded; the conductor's mutable parent pointer is not synchronized. */
+    if (aeron_image_is_closed(image))
+    {
+        AERON_SET_ERR(EINVAL, "%s", "image is closed");
+        return -1;
+    }
+
+    /* The retained image pins its conductor, while a concurrently closed parent subscription can already be freed. */
+    return aeron_client_conductor_reject_image(
+        image->conductor,
         image->key.correlation_id,
         aeron_image_position(image),
         reason);

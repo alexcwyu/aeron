@@ -22,6 +22,15 @@ extern "C"
 #include "aeron_publication_image.h"
 #include "aeron_data_packet_dispatcher.h"
 #include "aeron_driver_receiver.h"
+
+int32_t aeron_publication_image_validate_packet(
+    aeron_publication_image_t *image,
+    aeron_receive_destination_t *destination,
+    int32_t term_length,
+    int32_t term_offset,
+    const uint8_t *buffer,
+    size_t length,
+    struct timespec *media_receive_timestamp);
 }
 
 #define CAPACITY (32 * 1024)
@@ -30,6 +39,91 @@ extern "C"
 
 typedef std::array<std::uint8_t, CAPACITY> buffer_t;
 typedef std::array<std::uint8_t, 4 * CAPACITY> buffer_4x_t;
+
+TEST(PublicationImageValidationTest, shouldRejectPositiveFramesShorterThanDataHeader)
+{
+    aeron_publication_image_t image = {};
+    aeron_receive_destination_t destination = {};
+    for (const int16_t type : {AERON_HDR_TYPE_DATA, AERON_HDR_TYPE_PAD})
+    {
+        for (const int32_t frame_length : {1, 31})
+        {
+            for (const int32_t frame_offset : {0, 32})
+            {
+                SCOPED_TRACE(::testing::Message() << "type=" << type << " length=" << frame_length
+                    << " offset=" << frame_offset);
+                alignas(aeron_data_header_t) uint8_t data[64] = {};
+                auto *first = reinterpret_cast<aeron_data_header_t *>(data);
+                first->frame_header.frame_length = 32;
+                first->frame_header.type = AERON_HDR_TYPE_DATA;
+                auto *frame = reinterpret_cast<aeron_data_header_t *>(data + frame_offset);
+                frame->frame_header.frame_length = frame_length;
+                frame->frame_header.type = type;
+                frame->term_offset = frame_offset;
+
+                EXPECT_EQ(-1, aeron_publication_image_validate_packet(
+                    &image, &destination, TERM_BUFFER_SIZE, 0, data, frame_offset + 32, nullptr));
+            }
+        }
+    }
+}
+
+TEST(PublicationImageValidationTest, shouldRejectNonPositiveFramesInAnyPosition)
+{
+    aeron_publication_image_t image = {};
+    aeron_receive_destination_t destination = {};
+    for (const int16_t type : {AERON_HDR_TYPE_DATA, AERON_HDR_TYPE_PAD})
+    {
+        for (const int32_t frame_length : {0, -1, -31, -32, INT32_MIN})
+        {
+            for (const int32_t frame_offset : {0, 32})
+            {
+                if (0 == frame_offset && 0 == frame_length)
+                {
+                    continue; // a lone zero-length frame is a heartbeat, which is valid
+                }
+
+                SCOPED_TRACE(::testing::Message() << "type=" << type << " length=" << frame_length
+                    << " offset=" << frame_offset);
+                alignas(aeron_data_header_t) uint8_t data[64] = {};
+                auto *first = reinterpret_cast<aeron_data_header_t *>(data);
+                first->frame_header.frame_length = 32;
+                first->frame_header.type = AERON_HDR_TYPE_DATA;
+                auto *frame = reinterpret_cast<aeron_data_header_t *>(data + frame_offset);
+                frame->frame_header.frame_length = frame_length;
+                frame->frame_header.type = type;
+                frame->term_offset = frame_offset;
+
+                // A later frame with a length in [-31, 0] aligns to zero and used to spin the receiver forever.
+                EXPECT_EQ(-1, aeron_publication_image_validate_packet(
+                    &image, &destination, TERM_BUFFER_SIZE, 0, data, frame_offset + 32, nullptr));
+            }
+        }
+    }
+}
+
+TEST(PublicationImageValidationTest, shouldPreserveHeaderBoundaryHeartbeatAndTrailingPadding)
+{
+    aeron_publication_image_t image = {};
+    aeron_receive_destination_t destination = {};
+    alignas(aeron_data_header_t) uint8_t data[32] = {};
+    auto *frame = reinterpret_cast<aeron_data_header_t *>(data);
+    for (const int16_t type : {AERON_HDR_TYPE_DATA, AERON_HDR_TYPE_PAD})
+    {
+        frame->frame_header.type = type;
+        frame->frame_header.frame_length = 32;
+        EXPECT_EQ(32, aeron_publication_image_validate_packet(
+            &image, &destination, TERM_BUFFER_SIZE, 0, data, sizeof(data), nullptr));
+    }
+    frame->frame_header.type = AERON_HDR_TYPE_DATA;
+    frame->frame_header.frame_length = 0;
+    EXPECT_EQ(0, aeron_publication_image_validate_packet(
+        &image, &destination, TERM_BUFFER_SIZE, 0, data, sizeof(data), nullptr));
+    frame->frame_header.type = AERON_HDR_TYPE_PAD;
+    frame->frame_header.frame_length = 4096;
+    EXPECT_EQ(4096, aeron_publication_image_validate_packet(
+        &image, &destination, TERM_BUFFER_SIZE, 0, data, sizeof(data), nullptr));
+}
 
 static bool always_measure_rtt(void *state, int64_t now_ns)
 {
@@ -187,7 +281,7 @@ TEST_F(PublicationImageTest, shouldAddAndRemoveDestination)
 TEST_F(PublicationImageTest, shouldSendControlMessagesToAllDestinations)
 {
     struct sockaddr_storage addr = {}; // Don't really care what value this is.
-    uint8_t data[128];
+    uint8_t data[128] = {};
     auto *message = reinterpret_cast<aeron_data_header_t *>(data);
     const char *uri_1 = "aeron:udp?endpoint=localhost:9090";
     const char *uri_2 = "aeron:udp?endpoint=localhost:9091";
@@ -246,13 +340,17 @@ TEST_F(PublicationImageTest, shouldSendControlMessagesToAllDestinations)
     aeron_publication_image_initiate_rttm(image, 1000000000);
     ASSERT_EQ(1, bindings_state_dest1->rttm_count);
 
+    message->frame_header.type = AERON_HDR_TYPE_DATA;
+    message->frame_header.version = AERON_FRAME_HEADER_VERSION;
+    message->frame_header.flags = AERON_DATA_HEADER_UNFRAGMENTED;
     message->stream_id = stream_id;
     message->session_id = session_id;
     message->frame_header.frame_length = 64;
     message->term_id = 0;
     message->term_offset = 0;
 
-    aeron_publication_image_insert_packet(image, dest_2, 0, 0, data, 64, &addr, nullptr);
+    ASSERT_EQ(64, aeron_publication_image_insert_packet(image, dest_2, 0, 0, data, 64, &addr, nullptr));
+    ASSERT_EQ(0, aeron_counter_get_plain(image->invalid_packets_counter));
 
     aeron_publication_image_schedule_status_message(image, 1, TERM_BUFFER_SIZE);
     aeron_publication_image_send_pending_status_message(image, 2000000000);
@@ -273,7 +371,7 @@ TEST_F(PublicationImageTest, shouldSendControlMessagesToAllDestinations)
 TEST_F(PublicationImageTest, shouldHandleEosAcrossDestinations)
 {
     struct sockaddr_storage addr = {}; // Don't really care what value this is.
-    uint8_t data[128];
+    uint8_t data[128] = {};
     memset(data, 0, sizeof(data));
 
     auto *heartbeat = reinterpret_cast<aeron_data_header_t *>(data);
@@ -330,12 +428,14 @@ TEST_F(PublicationImageTest, shouldHandleEosAcrossDestinations)
     AERON_GET_ACQUIRE(is_eos, image->is_end_of_stream);
     ASSERT_EQ(false, is_eos);
 
-    aeron_publication_image_insert_packet(image, dest_2, 0, 0, data, AERON_DATA_HEADER_LENGTH, &addr, nullptr);
+    ASSERT_EQ(AERON_DATA_HEADER_LENGTH, aeron_publication_image_insert_packet(image, dest_2, 0, 0, data, AERON_DATA_HEADER_LENGTH, &addr, nullptr));
+    ASSERT_EQ(0, aeron_counter_get_plain(image->invalid_packets_counter));
 
     AERON_GET_ACQUIRE(is_eos, image->is_end_of_stream);
     ASSERT_EQ(false, is_eos);
 
-    aeron_publication_image_insert_packet(image, dest_1, 0, 0, data, AERON_DATA_HEADER_LENGTH, &addr, nullptr);
+    ASSERT_EQ(AERON_DATA_HEADER_LENGTH, aeron_publication_image_insert_packet(image, dest_1, 0, 0, data, AERON_DATA_HEADER_LENGTH, &addr, nullptr));
+    ASSERT_EQ(0, aeron_counter_get_plain(image->invalid_packets_counter));
 
     AERON_GET_ACQUIRE(is_eos, image->is_end_of_stream);
     ASSERT_EQ(true, is_eos);
@@ -344,7 +444,7 @@ TEST_F(PublicationImageTest, shouldHandleEosAcrossDestinations)
 TEST_F(PublicationImageTest, shouldNotSendControlMessagesToAllDestinationThatHaveNotBeenActive)
 {
     struct sockaddr_storage addr = {}; // Don't really care what value this is.
-    uint8_t data[128];
+    uint8_t data[128] = {};
     auto *message = reinterpret_cast<aeron_data_header_t *>(data);
     const char *uri_1 = "aeron:udp?endpoint=localhost:9090";
     const char *uri_2 = "aeron:udp?endpoint=localhost:9091";
@@ -397,21 +497,27 @@ TEST_F(PublicationImageTest, shouldNotSendControlMessagesToAllDestinationThatHav
 
     size_t message_length = 64;
 
+    message->frame_header.type = AERON_HDR_TYPE_DATA;
+    message->frame_header.version = AERON_FRAME_HEADER_VERSION;
+    message->frame_header.flags = AERON_DATA_HEADER_UNFRAGMENTED;
     message->stream_id = stream_id;
     message->session_id = session_id;
     message->frame_header.frame_length = (int32_t) message_length;
     message->term_id = 0;
     message->term_offset = 0;
 
-    aeron_publication_image_insert_packet(image, dest_1, 0, 0, data, message_length, &addr, nullptr);
-    aeron_publication_image_insert_packet(image, dest_2, 0, 0, data, message_length, &addr, nullptr);
+    ASSERT_EQ(message_length, aeron_publication_image_insert_packet(image, dest_1, 0, 0, data, message_length, &addr, nullptr));
+    ASSERT_EQ(0, aeron_counter_get_plain(image->invalid_packets_counter));
+    ASSERT_EQ(message_length, aeron_publication_image_insert_packet(image, dest_2, 0, 0, data, message_length, &addr, nullptr));
+    ASSERT_EQ(0, aeron_counter_get_plain(image->invalid_packets_counter));
 
     aeron_clock_update_cached_nano_time(m_context->receiver_cached_clock, t1_ns);
 
     auto next_offset = (int32_t) message_length;
     message->term_offset = next_offset;
 
-    aeron_publication_image_insert_packet(image, dest_2, 0, next_offset, data, message_length, &addr, nullptr);
+    ASSERT_EQ(message_length, aeron_publication_image_insert_packet(image, dest_2, 0, next_offset, data, message_length, &addr, nullptr));
+    ASSERT_EQ(0, aeron_counter_get_plain(image->invalid_packets_counter));
 
     aeron_publication_image_schedule_status_message(image, 1, TERM_BUFFER_SIZE);
     aeron_publication_image_send_pending_status_message(image, t1_ns);
@@ -428,7 +534,7 @@ TEST_F(PublicationImageTest, shouldNotSendControlMessagesToAllDestinationThatHav
 TEST_F(PublicationImageTest, shouldTrackActiveTransportAccountBasedOnFrames)
 {
     struct sockaddr_storage addr = {}; // Don't really care what value this is.
-    uint8_t data[128];
+    uint8_t data[128] = {};
     auto *message = reinterpret_cast<aeron_data_header_t *>(data);
     const char *uri_1 = "aeron:udp?endpoint=localhost:9090";
     const char *uri_2 = "aeron:udp?endpoint=localhost:9091";
@@ -484,19 +590,24 @@ TEST_F(PublicationImageTest, shouldTrackActiveTransportAccountBasedOnFrames)
 
     ASSERT_EQ(0, image->log_meta_data->active_transport_count);
 
+    message->frame_header.type = AERON_HDR_TYPE_DATA;
+    message->frame_header.version = AERON_FRAME_HEADER_VERSION;
+    message->frame_header.flags = AERON_DATA_HEADER_UNFRAGMENTED;
     message->stream_id = stream_id;
     message->session_id = session_id;
     message->frame_header.frame_length = 64;
     message->term_id = 0;
     message->term_offset = 0;
 
-    aeron_publication_image_insert_packet(image, dest_2, 0, 0, data, 64, &addr, nullptr);
+    ASSERT_EQ(64, aeron_publication_image_insert_packet(image, dest_2, 0, 0, data, 64, &addr, nullptr));
+    ASSERT_EQ(0, aeron_counter_get_plain(image->invalid_packets_counter));
     aeron_publication_image_schedule_status_message(image, 0, TERM_BUFFER_SIZE);
     aeron_publication_image_send_pending_status_message(image, t0_ns);
 
     ASSERT_EQ(1, image->log_meta_data->active_transport_count);
 
-    aeron_publication_image_insert_packet(image, dest_1, 0, 0, data, 64, &addr, nullptr);
+    ASSERT_EQ(64, aeron_publication_image_insert_packet(image, dest_1, 0, 0, data, 64, &addr, nullptr));
+    ASSERT_EQ(0, aeron_counter_get_plain(image->invalid_packets_counter));
     aeron_publication_image_schedule_status_message(image, 0, TERM_BUFFER_SIZE);
     aeron_publication_image_send_pending_status_message(image, t0_ns);
 
@@ -506,7 +617,7 @@ TEST_F(PublicationImageTest, shouldTrackActiveTransportAccountBasedOnFrames)
 TEST_F(PublicationImageTest, shouldTrackUnderRunningTransportsWithLastSmAndReceiverWindowLength)
 {
     struct sockaddr_storage addr = {}; // Don't really care what value this is.
-    uint8_t data[128];
+    uint8_t data[128] = {};
     auto *message = reinterpret_cast<aeron_data_header_t *>(data);
     const char *uri_1 = "aeron:udp?endpoint=localhost:9090";
     const char *uri_2 = "aeron:udp?endpoint=localhost:9091";
@@ -565,20 +676,25 @@ TEST_F(PublicationImageTest, shouldTrackUnderRunningTransportsWithLastSmAndRecei
 
     aeron_clock_update_cached_nano_time(m_context->receiver_cached_clock, t1_ns);
 
+    message->frame_header.type = AERON_HDR_TYPE_DATA;
+    message->frame_header.version = AERON_FRAME_HEADER_VERSION;
+    message->frame_header.flags = AERON_DATA_HEADER_UNFRAGMENTED;
     message->stream_id = stream_id;
     message->session_id = session_id;
     message->frame_header.frame_length = (int32_t) message_length;
     message->term_id = 0;
     message->term_offset = 0;
 
-    aeron_publication_image_insert_packet(image, dest_2, 0, 0, data, message_length, &addr, nullptr);
+    ASSERT_EQ(message_length, aeron_publication_image_insert_packet(image, dest_2, 0, 0, data, message_length, &addr, nullptr));
+    ASSERT_EQ(0, aeron_counter_get_plain(image->invalid_packets_counter));
 
     aeron_publication_image_schedule_status_message(image, message_length, TERM_BUFFER_SIZE);
     aeron_publication_image_send_pending_status_message(image, t1_ns);
 
     ASSERT_EQ(1, bindings_state_dest1->sm_count);
 
-    aeron_publication_image_insert_packet(image, dest_1, 0, 0, data, message_length, &addr, nullptr);
+    ASSERT_EQ(message_length, aeron_publication_image_insert_packet(image, dest_1, 0, 0, data, message_length, &addr, nullptr));
+    ASSERT_EQ(0, aeron_counter_get_plain(image->invalid_packets_counter));
 
     aeron_publication_image_schedule_status_message(image, message_length, TERM_BUFFER_SIZE);
     aeron_publication_image_send_pending_status_message(image, t1_ns);
@@ -893,7 +1009,7 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_P(TermOffsetValidationTest, shouldRejectPacketIfFirstFrameHasWrongTermOffset)
 {
     sockaddr_storage addr;
-    uint8_t data[128];
+    uint8_t data[128] = {};
     memset(&data, 0, sizeof(data));
     aeron_publication_image_t image;
     image.initial_term_id = 0;
@@ -921,7 +1037,7 @@ TEST_P(TermOffsetValidationTest, shouldRejectPacketIfFirstFrameHasWrongTermOffse
 TEST_F(PublicationImageTest, shouldRejectPacketIfItContainsTrailingBytes)
 {
     sockaddr_storage addr;
-    uint8_t data[128];
+    uint8_t data[128] = {};
     memset(&data, 0, sizeof(data));
     aeron_publication_image_t image;
     image.initial_term_id = 0;
@@ -983,7 +1099,7 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_P(FrameTypeValidationTest, shouldRejectPacketWithFramesHavingWrongFrameType)
 {
     sockaddr_storage addr;
-    uint8_t data[128];
+    uint8_t data[128] = {};
     memset(&data, 0, sizeof(data));
     aeron_publication_image_t image;
     image.initial_term_id = 0;
@@ -1018,7 +1134,7 @@ TEST_P(FrameTypeValidationTest, shouldRejectPacketWithFramesHavingWrongFrameType
 TEST_F(PublicationImageTest, shouldRejectPacketIfFrameOffsetIsIncorrect)
 {
     sockaddr_storage addr;
-    uint8_t data[128];
+    uint8_t data[128] = {};
     memset(&data, 0, sizeof(data));
     aeron_publication_image_t image;
     image.initial_term_id = 0;
@@ -1053,7 +1169,7 @@ TEST_F(PublicationImageTest, shouldRejectPacketIfFrameOffsetIsIncorrect)
 TEST_F(PublicationImageTest, shouldRejectPacketIfFrameLengthIsNegative)
 {
     sockaddr_storage addr;
-    uint8_t data[128];
+    uint8_t data[128] = {};
     memset(&data, 0, sizeof(data));
     aeron_publication_image_t image;
     image.initial_term_id = 0;
@@ -1088,7 +1204,7 @@ TEST_F(PublicationImageTest, shouldRejectPacketIfFrameLengthIsNegative)
 TEST_F(PublicationImageTest, shouldRejectPacketIfFrameDoesNotFitIntoThePacket)
 {
     sockaddr_storage addr;
-    uint8_t data[128];
+    uint8_t data[128] = {};
     memset(&data, 0, sizeof(data));
     aeron_publication_image_t image;
     image.initial_term_id = 0;
@@ -1123,7 +1239,7 @@ TEST_F(PublicationImageTest, shouldRejectPacketIfFrameDoesNotFitIntoThePacket)
 TEST_F(PublicationImageTest, shouldRejectPacketIfFrameLengthPlussOffsetExceedsTermLengthBoundary)
 {
     sockaddr_storage addr;
-    uint8_t data[128];
+    uint8_t data[128] = {};
     memset(&data, 0, sizeof(data));
     aeron_publication_image_t image;
     image.initial_term_id = 0;
@@ -1158,7 +1274,7 @@ TEST_F(PublicationImageTest, shouldRejectPacketIfFrameLengthPlussOffsetExceedsTe
 TEST_F(PublicationImageTest, shouldAllowTrailingPaddingFrameToExceedPacketLength)
 {
     sockaddr_storage addr;
-    uint8_t data[128];
+    uint8_t data[128] = {};
     memset(&data, 0, sizeof(data));
     int64_t invalid_packets = 0;
     int64_t flow_control_over_runs = 0;
@@ -1203,7 +1319,7 @@ TEST_F(PublicationImageTest, shouldAllowTrailingPaddingFrameToExceedPacketLength
 TEST_F(PublicationImageTest, shouldAllowHeartBeats)
 {
     sockaddr_storage addr;
-    uint8_t data[128];
+    uint8_t data[128] = {};
     memset(&data, 0, sizeof(data));
     int64_t invalid_packets = 0;
     int64_t flow_control_over_runs = 0;

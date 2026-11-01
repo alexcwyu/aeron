@@ -710,9 +710,11 @@ static int aeron_driver_name_resolver_on_resolution_entry(
 static bool aeron_driver_name_resolver_is_wildcard(int8_t res_type, uint8_t *address)
 {
     in_addr_t ipv4_wildcard = INADDR_ANY;
+    /* each family tests only its own address bytes; a zero IPv6 prefix is not a wildcard */
     return
         (res_type == AERON_RES_HEADER_TYPE_NAME_TO_IP6_MD && 0 == memcmp(address, &in6addr_any, sizeof(in6addr_any))) ||
-        0 == memcmp(address, &ipv4_wildcard, sizeof(ipv4_wildcard));
+        (res_type == AERON_RES_HEADER_TYPE_NAME_TO_IP4_MD &&
+            0 == memcmp(address, &ipv4_wildcard, sizeof(ipv4_wildcard)));
 }
 
 static void aeron_name_resolver_log_and_clear_error(aeron_driver_name_resolver_t *resolver)
@@ -766,13 +768,16 @@ void aeron_driver_name_resolver_receive(
         if (AERON_RES_HEADER_TYPE_NAME_TO_IP4_MD == resolution_header->res_type)
         {
             aeron_resolution_header_ipv4_t *ip4_hdr = (aeron_resolution_header_ipv4_t *)resolution_header;
-            if (length < sizeof(aeron_resolution_header_ipv4_t) ||
-                length < (entry_length = aeron_res_header_entry_length_ipv4(ip4_hdr)))
+            /* the entry must fit in the bytes left of the frame and its name length is not negative */
+            if (remaining < sizeof(aeron_resolution_header_ipv4_t) ||
+                ip4_hdr->name_length < 0 ||
+                (size_t)ip4_hdr->name_length > remaining - sizeof(aeron_resolution_header_ipv4_t))
             {
                 aeron_counter_increment(resolver->invalid_packets_counter);
                 return;
             }
 
+            entry_length = aeron_res_header_entry_length_ipv4(ip4_hdr);
             memcpy(cache_addr.address, ip4_hdr->addr, sizeof(ip4_hdr->addr));
             name_length = (size_t)ip4_hdr->name_length;
             name = (const char *)(ip4_hdr + 1);
@@ -780,13 +785,16 @@ void aeron_driver_name_resolver_receive(
         else if (AERON_RES_HEADER_TYPE_NAME_TO_IP6_MD == resolution_header->res_type)
         {
             aeron_resolution_header_ipv6_t *ip6_hdr = (aeron_resolution_header_ipv6_t *)resolution_header;
-            if (length < sizeof(aeron_resolution_header_ipv6_t) ||
-                length < (entry_length = aeron_res_header_entry_length_ipv6(ip6_hdr)))
+            /* the entry must fit in the bytes left of the frame and its name length is not negative */
+            if (remaining < sizeof(aeron_resolution_header_ipv6_t) ||
+                ip6_hdr->name_length < 0 ||
+                (size_t)ip6_hdr->name_length > remaining - sizeof(aeron_resolution_header_ipv6_t))
             {
                 aeron_counter_increment(resolver->invalid_packets_counter);
                 return;
             }
 
+            entry_length = aeron_res_header_entry_length_ipv6(ip6_hdr);
             memcpy(cache_addr.address, ip6_hdr->addr, sizeof(ip6_hdr->addr));
             name_length = (size_t)ip6_hdr->name_length;
             name = (const char *)(ip6_hdr + 1);
@@ -819,7 +827,7 @@ void aeron_driver_name_resolver_receive(
             aeron_name_resolver_log_and_clear_error(resolver);
         }
 
-        remaining -= entry_length;
+        remaining = entry_length < remaining ? remaining - entry_length : 0;
     }
 }
 

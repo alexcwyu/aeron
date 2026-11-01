@@ -354,7 +354,8 @@ static void aeron_send_channel_apply_timestamps(
             size_t offset = 0;
             do
             {
-                aeron_data_header_t *data_header = ((aeron_data_header_t *)iovec.iov_base + offset);
+                /* offset counts bytes, so step the iovec in bytes, not in aeron_data_header_t units */
+                aeron_data_header_t *data_header = (aeron_data_header_t *)((uint8_t *)iovec.iov_base + offset);
                 if (data_header->frame_header.frame_length <= 0)
                 {
                     break;

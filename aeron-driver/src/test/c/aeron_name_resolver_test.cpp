@@ -26,6 +26,7 @@ extern "C"
 #include "aeron_name_resolver.h"
 #include "aeron_name_resolver_cache.h"
 #include "aeron_driver_name_resolver.h"
+#include "media/aeron_udp_channel_transport.h"
 #include "aeron_system_counters.h"
 #include "agent/aeron_driver_agent.h"
 #include "aeron_csv_table_name_resolver.h"
@@ -1053,4 +1054,78 @@ TEST_F(NameResolverTest, shouldHandleDissection)
     }
 
     aeron_delete_file(temp_filename);
+}
+
+extern "C" void aeron_driver_name_resolver_receive(
+    aeron_udp_channel_data_paths_t *, aeron_udp_channel_transport_t *, void *, void *, void *,
+    uint8_t *, size_t, struct sockaddr_storage *, struct timespec *);
+
+// Java's ResolutionEntryFlyweight.isValid bounds each entry by the bytes left in the frame.
+class NameResolverMalformedEntryTest : public NameResolverTest
+{
+protected:
+    void SetUp() override
+    {
+        NameResolverTest::SetUp();
+        initResolver(&m_a, AERON_NAME_RESOLVER_DRIVER, "", INT64_C(8932472347945), "A", "0.0.0.0:0");
+        auto *frame = reinterpret_cast<aeron_frame_header_t *>(m_packet);
+        frame->version = AERON_FRAME_HEADER_VERSION;
+        frame->type = AERON_HDR_TYPE_RES;
+    }
+
+    size_t addEntry(size_t offset, const char *name)
+    {
+        m_source.ss_family = AF_INET;
+        auto *ipv4 = reinterpret_cast<struct sockaddr_in *>(&m_source);
+        ipv4->sin_port = htons(23456);
+        ipv4->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        auto *entry = reinterpret_cast<aeron_resolution_header_t *>(m_packet + offset);
+        const int entry_length = aeron_driver_name_resolver_set_resolution_header_from_sockaddr(
+            entry, sizeof(m_packet) - offset, AERON_RES_HEADER_SELF_FLAG, &m_source, name, strlen(name));
+        EXPECT_GT(entry_length, 0);
+        return static_cast<size_t>(entry_length);
+    }
+
+    void setNameLength(size_t offset, int16_t name_length)
+    {
+        reinterpret_cast<aeron_resolution_header_ipv4_t *>(m_packet + offset)->name_length = name_length;
+    }
+
+    void receive(size_t length)
+    {
+        aeron_driver_name_resolver_receive(
+            nullptr, nullptr, m_a.resolver.state, nullptr, nullptr, m_packet, length, &m_source, nullptr);
+    }
+
+    alignas(8) uint8_t m_packet[256] = {};
+    struct sockaddr_storage m_source = {};
+};
+
+TEST_F(NameResolverMalformedEntryTest, shouldRejectEntryWithNegativeNameLength)
+{
+    const size_t first_offset = sizeof(aeron_frame_header_t);
+    const size_t first_length = addEntry(first_offset, "B");
+    setNameLength(first_offset, -1);
+
+    receive(first_offset + first_length);
+
+    EXPECT_EQ(1, readSystemCounter(&m_a, AERON_SYSTEM_COUNTER_INVALID_PACKETS));
+    EXPECT_EQ(0, readNeighborCounter(&m_a));
+    EXPECT_EQ(0, readCacheEntriesCounter(&m_a));
+}
+
+TEST_F(NameResolverMalformedEntryTest, shouldRejectEntryLongerThanTheBytesLeftInTheFrame)
+{
+    const size_t first_offset = sizeof(aeron_frame_header_t);
+    const size_t second_offset = first_offset + addEntry(first_offset, "B");
+    addEntry(second_offset, "C");
+    // The second entry claims a 24 byte name, yet only 10 bytes follow its header and the entry still fits the
+    // packet length as a whole.
+    setNameLength(second_offset, 24);
+
+    receive(second_offset + sizeof(aeron_resolution_header_ipv4_t) + 10);
+
+    EXPECT_EQ(1, readSystemCounter(&m_a, AERON_SYSTEM_COUNTER_INVALID_PACKETS));
+    EXPECT_EQ(1, readNeighborCounter(&m_a));
+    EXPECT_EQ(1, readCacheEntriesCounter(&m_a));
 }
