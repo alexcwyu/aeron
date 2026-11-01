@@ -496,6 +496,8 @@ const char *aeron_driver_threading_mode_to_string(aeron_threading_mode_t mode)
             return "SHARED_NETWORK";
         case AERON_THREADING_MODE_INVOKER:
             return "INVOKER";
+        case AERON_THREADING_MODE_DEDICATED_SENDER_INVOKED:
+            return "DEDICATED_SENDER_INVOKED";
         default:
             return "unknown";
     }
@@ -1063,6 +1065,7 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
             }
             break;
 
+        case AERON_THREADING_MODE_DEDICATED_SENDER_INVOKED:
         case AERON_THREADING_MODE_DEDICATED:
         default:
             if (aeron_agent_init(
@@ -1203,6 +1206,7 @@ error:
     return -1;
 }
 
+/* the sender runner of DEDICATED_SENDER_INVOKED is marked manual instead of getting a thread */
 int aeron_driver_start(aeron_driver_t *driver, bool manual_main_loop)
 {
     if (NULL == driver)
@@ -1215,6 +1219,13 @@ int aeron_driver_start(aeron_driver_t *driver, bool manual_main_loop)
     {
         if (AERON_AGENT_STATE_INITED == driver->runners[i].state)
         {
+            if (AERON_THREADING_MODE_DEDICATED_SENDER_INVOKED == driver->context->threading_mode &&
+                AERON_AGENT_RUNNER_SENDER == i)
+            {
+                driver->runners[i].state = AERON_AGENT_STATE_MANUAL;
+                continue;
+            }
+
             if (aeron_agent_start(&driver->runners[i]) < 0)
             {
                 return -1;
@@ -1269,6 +1280,74 @@ void aeron_driver_main_idle_strategy(aeron_driver_t *driver, int work_count)
     }
 
     aeron_agent_idle(&driver->runners[AERON_AGENT_RUNNER_CONDUCTOR], work_count);
+}
+
+static aeron_agent_runner_t *aeron_driver_invoked_sender_runner(aeron_driver_t *driver, const char *what)
+{
+    if (NULL == driver)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "driver is null");
+        return NULL;
+    }
+
+    if (AERON_THREADING_MODE_DEDICATED_SENDER_INVOKED != driver->context->threading_mode)
+    {
+        AERON_SET_ERR(EINVAL, "%s requires the DEDICATED_SENDER_INVOKED threading mode", what);
+        return NULL;
+    }
+
+    return &driver->runners[AERON_AGENT_RUNNER_SENDER];
+}
+
+/* runs the host-owned sender duty cycle on the calling thread */
+int aeron_driver_sender_invoke(aeron_driver_t *driver)
+{
+    aeron_agent_runner_t *runner = aeron_driver_invoked_sender_runner(driver, "aeron_driver_sender_invoke");
+    if (NULL == runner)
+    {
+        return -1;
+    }
+
+    if (AERON_AGENT_STATE_MANUAL != runner->state || !aeron_agent_is_running(runner))
+    {
+        return 0;
+    }
+
+    return aeron_agent_do_work(runner);
+}
+
+/* a pending command or an attached network publication means the host must keep invoking the sender */
+bool aeron_driver_sender_needs_invoke(aeron_driver_t *driver)
+{
+    aeron_agent_runner_t *runner = aeron_driver_invoked_sender_runner(driver, "aeron_driver_sender_needs_invoke");
+    if (NULL == runner || AERON_AGENT_STATE_MANUAL != runner->state || !aeron_agent_is_running(runner))
+    {
+        return false;
+    }
+
+    const aeron_driver_sender_t *sender = &driver->sender;
+    if (sender->network_publications.length > 0)
+    {
+        return true;
+    }
+
+    const aeron_spsc_rb_t *command_queue = sender->sender_proxy.command_queue;
+    int64_t tail_position;
+    AERON_GET_ACQUIRE(tail_position, command_queue->descriptor->tail_position);
+
+    return tail_position != aeron_spsc_rb_consumer_position((aeron_spsc_rb_t *)command_queue);
+}
+
+/* release a blocked producer while joining the conductor, without executing Sender work. */
+int aeron_driver_sender_drain_invoked_commands_for_shutdown(aeron_driver_t *driver)
+{
+    if (NULL == aeron_driver_invoked_sender_runner(driver, "aeron_driver_sender_drain_invoked_commands_for_shutdown"))
+    {
+        return -1;
+    }
+
+    aeron_driver_sender_drain_commands_for_shutdown(&driver->sender);
+    return 0;
 }
 
 int aeron_driver_close(aeron_driver_t *driver)

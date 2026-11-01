@@ -53,12 +53,14 @@ bool aeron_driver_context_get_dir_warn_if_exists(aeron_driver_context_t *context
  */
 #define AERON_THREADING_MODE_ENV_VAR "AERON_THREADING_MODE"
 
+/* DEDICATED_SENDER_INVOKED keeps the conductor, receiver and native resource agents on their own threads and leaves the sender to the host */
 typedef enum aeron_threading_mode_enum
 {
     AERON_THREADING_MODE_DEDICATED,
     AERON_THREADING_MODE_SHARED_NETWORK,
     AERON_THREADING_MODE_SHARED,
-    AERON_THREADING_MODE_INVOKER
+    AERON_THREADING_MODE_INVOKER,
+    AERON_THREADING_MODE_DEDICATED_SENDER_INVOKED
 }
 aeron_threading_mode_t;
 
@@ -1151,6 +1153,39 @@ int aeron_driver_main_do_work(aeron_driver_t *driver);
  * @param work_count to pass to idle strategy.
  */
 void aeron_driver_main_idle_strategy(aeron_driver_t *driver, int work_count);
+
+/**
+ * Run the Sender do_work duty cycle once on the calling thread.
+ *
+ * Only valid for the DEDICATED_SENDER_INVOKED threading mode after aeron_driver_start. The caller must be the only
+ * thread invoking the sender and must stop before aeron_driver_close.
+ *
+ * @param driver to run the Sender duty cycle on.
+ * @return the work count, 0 when the sender is stopped, or -1 for error.
+ */
+int aeron_driver_sender_invoke(aeron_driver_t *driver);
+
+/**
+ * Whether the Sender has work that needs an invoke: a pending command or at least one network publication.
+ *
+ * Only valid for the DEDICATED_SENDER_INVOKED threading mode after aeron_driver_start, from the invoking thread.
+ *
+ * @param driver to check.
+ * @return true when aeron_driver_sender_invoke would have work to consider.
+ */
+bool aeron_driver_sender_needs_invoke(aeron_driver_t *driver);
+
+/**
+ * Discard pending host-invoked Sender commands during shutdown, releasing their owned destination URIs.
+ *
+ * Only valid for DEDICATED_SENDER_INVOKED. Stop normal Sender invokes before calling this from the sole consuming
+ * thread. It may be called while the Conductor is exiting, to release a producer blocked on the Sender queue.
+ * It performs no network duty cycle and does not enqueue commands to the Conductor. The driver must remain live.
+ *
+ * @param driver whose Sender commands should be discarded.
+ * @return 0 for success, or -1 for an invalid driver or threading mode.
+ */
+int aeron_driver_sender_drain_invoked_commands_for_shutdown(aeron_driver_t *driver);
 
 /**
  * Close and delete aeron_driver_t struct.

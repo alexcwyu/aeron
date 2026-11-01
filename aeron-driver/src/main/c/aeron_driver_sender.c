@@ -204,15 +204,24 @@ static void aeron_driver_sender_drain_pending_commands_on_close(
     }
 }
 
+/* discard queued commands without network work or reverse conductor commands. */
+void aeron_driver_sender_drain_commands_for_shutdown(aeron_driver_sender_t *sender)
+{
+    aeron_spsc_rb_t *queue = sender->sender_proxy.command_queue;
+    int64_t previous_position;
+    do
+    {
+        previous_position = aeron_spsc_rb_consumer_position(queue);
+        aeron_spsc_rb_read(queue, aeron_driver_sender_drain_pending_commands_on_close, sender, SIZE_MAX);
+    }
+    while (previous_position != aeron_spsc_rb_consumer_position(queue));
+}
+
 void aeron_driver_sender_on_close(void *clientd)
 {
     aeron_driver_sender_t *sender = (aeron_driver_sender_t *)clientd;
 
-    aeron_spsc_rb_read(
-        sender->sender_proxy.command_queue,
-        aeron_driver_sender_drain_pending_commands_on_close,
-        sender,
-        SIZE_MAX);
+    aeron_driver_sender_drain_commands_for_shutdown(sender);
 
     for (size_t i = 0; i < sender->recv_buffers.vector_capacity; i++)
     {

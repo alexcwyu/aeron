@@ -42,6 +42,7 @@
 #include "util/aeron_dlopen.h"
 #include "media/aeron_debug_channel_endpoint_configuration.h"
 
+/* parses DEDICATED_SENDER_INVOKED */
 aeron_threading_mode_t aeron_config_parse_threading_mode(const char *threading_mode, aeron_threading_mode_t def)
 {
     aeron_threading_mode_t result = def;
@@ -63,6 +64,10 @@ aeron_threading_mode_t aeron_config_parse_threading_mode(const char *threading_m
         else if (strncmp(threading_mode, "INVOKER", sizeof("INVOKER")) == 0)
         {
             result = AERON_THREADING_MODE_INVOKER;
+        }
+        else if (strncmp(threading_mode, "DEDICATED_SENDER_INVOKED", sizeof("DEDICATED_SENDER_INVOKED")) == 0)
+        {
+            result = AERON_THREADING_MODE_DEDICATED_SENDER_INVOKED;
         }
         else
         {
