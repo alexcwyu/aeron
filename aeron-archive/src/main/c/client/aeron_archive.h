@@ -332,6 +332,9 @@ typedef struct aeron_archive_recording_signal_stct
 
     /// Raw code representing the operation the recording has undertaken.
     int32_t recording_signal_code;
+
+    /// Correlation id of the request the signal answers; appended last so every upstream field keeps its offset.
+    int64_t correlation_id;
 }
 aeron_archive_recording_signal_t;
 

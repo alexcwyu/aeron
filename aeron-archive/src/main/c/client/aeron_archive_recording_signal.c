@@ -36,6 +36,7 @@ int aeron_archive_recording_signal_dispatch_buffer(aeron_archive_context_t *ctx,
 
         aeron_archive_recording_signal_t signal;
 
+        signal.correlation_id = aeron_archive_client_recordingSignalEvent_correlationId(&recording_signal_event);
         signal.control_session_id = aeron_archive_client_recordingSignalEvent_controlSessionId(&recording_signal_event);
         signal.recording_id = aeron_archive_client_recordingSignalEvent_recordingId(&recording_signal_event);
         signal.subscription_id = aeron_archive_client_recordingSignalEvent_subscriptionId(&recording_signal_event);
