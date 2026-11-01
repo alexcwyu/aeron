@@ -204,3 +204,14 @@ Linux x86-64 GCC ASan Debug, 2026-10-19: `driver_context_config_test` 23/23,
 `aeron_test_loss_generators_test` passed. Negative control: removing the guard
 fails the new `shouldPreserveOwnedDebugStateWhenResettingTheSameSupplierPair`
 with an AddressSanitizer double-free report.
+
+## Defects and sender mode (1.53.3-patch.5, 2026-11-01)
+
+Four defects reachable from the network or from concurrent API use (frame
+length validation, name resolver entry bounds, send timestamp stepping, image
+reject after the parent subscription closes), the `DEDICATED_SENDER_INVOKED`
+driver threading mode and the recording signal's `correlation_id` field, in
+four commits over `1.53.3-patch.4`
+([details](docs/patches/09-driver-defects-and-sender-mode.md)). Linux
+and macOS gates: `publication_image_test`, `name_resolver_test` and
+`sender_shutdown_test` pass; the first two fail against `1.53.3-patch.4`.
