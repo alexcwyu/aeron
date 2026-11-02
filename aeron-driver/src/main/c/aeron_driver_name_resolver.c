@@ -55,6 +55,7 @@ struct mmsghdr
 #define AERON_NAME_RESOLVER_DRIVER_NUM_RECV_BUFFERS (1)
 
 #define AERON_NAME_RESOLVER_DRIVER_MAX_BOOTSTRAP_NEIGHBORS (20)
+#define AERON_NAME_RESOLVER_DRIVER_MAX_NAME_LENGTH (512)
 
 typedef struct aeron_driver_name_resolver_neighbor_stct
 {
@@ -768,9 +769,10 @@ void aeron_driver_name_resolver_receive(
         if (AERON_RES_HEADER_TYPE_NAME_TO_IP4_MD == resolution_header->res_type)
         {
             aeron_resolution_header_ipv4_t *ip4_hdr = (aeron_resolution_header_ipv4_t *)resolution_header;
-            /* the entry must fit in the bytes left of the frame and its name length is not negative */
+            /* as Java's ResolutionEntryFlyweight.isValid: a name of 1 to 512 bytes that fits in the frame */
             if (remaining < sizeof(aeron_resolution_header_ipv4_t) ||
-                ip4_hdr->name_length < 0 ||
+                ip4_hdr->name_length <= 0 ||
+                ip4_hdr->name_length > AERON_NAME_RESOLVER_DRIVER_MAX_NAME_LENGTH ||
                 (size_t)ip4_hdr->name_length > remaining - sizeof(aeron_resolution_header_ipv4_t))
             {
                 aeron_counter_increment(resolver->invalid_packets_counter);
@@ -785,9 +787,10 @@ void aeron_driver_name_resolver_receive(
         else if (AERON_RES_HEADER_TYPE_NAME_TO_IP6_MD == resolution_header->res_type)
         {
             aeron_resolution_header_ipv6_t *ip6_hdr = (aeron_resolution_header_ipv6_t *)resolution_header;
-            /* the entry must fit in the bytes left of the frame and its name length is not negative */
+            /* as Java's ResolutionEntryFlyweight.isValid: a name of 1 to 512 bytes that fits in the frame */
             if (remaining < sizeof(aeron_resolution_header_ipv6_t) ||
-                ip6_hdr->name_length < 0 ||
+                ip6_hdr->name_length <= 0 ||
+                ip6_hdr->name_length > AERON_NAME_RESOLVER_DRIVER_MAX_NAME_LENGTH ||
                 (size_t)ip6_hdr->name_length > remaining - sizeof(aeron_resolution_header_ipv6_t))
             {
                 aeron_counter_increment(resolver->invalid_packets_counter);

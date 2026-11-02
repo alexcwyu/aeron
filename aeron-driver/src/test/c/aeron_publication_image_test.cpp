@@ -94,7 +94,7 @@ TEST(PublicationImageValidationTest, shouldRejectNonPositiveFramesInAnyPosition)
                 frame->frame_header.type = type;
                 frame->term_offset = frame_offset;
 
-                // A later frame with a length in [-31, 0] aligns to zero and used to spin the receiver forever.
+                // A later frame with a length in [-31, 0] is rejected wherever it sits in the packet.
                 EXPECT_EQ(-1, aeron_publication_image_validate_packet(
                     &image, &destination, TERM_BUFFER_SIZE, 0, data, frame_offset + 32, nullptr));
             }

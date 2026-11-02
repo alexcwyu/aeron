@@ -82,6 +82,7 @@ static void aeron_archive_dispatch_recording_signal(aeron_archive_t *aeron_archi
     signal.subscription_id = poller->subscription_id;
     signal.position = poller->position;
     signal.recording_signal_code = poller->recording_signal_code;
+    signal.correlation_id = poller->correlation_id;
 
     aeron_archive_recording_signal_dispatch_signal(aeron_archive->ctx, &signal);
 }

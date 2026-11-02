@@ -77,7 +77,7 @@ int aeron_res_header_entry_length(void *res, size_t remaining)
             {
                 aeron_resolution_header_ipv6_t *res_ipv6 = (aeron_resolution_header_ipv6_t *)res_header;
                 size_t entry_length = aeron_res_header_entry_length_ipv6(res_ipv6);
-                result = entry_length <= remaining ? (int)entry_length : -1;
+                result = res_ipv6->name_length >= 0 && entry_length <= remaining ? (int)entry_length : -1;
             }
             break;
         }
@@ -88,7 +88,7 @@ int aeron_res_header_entry_length(void *res, size_t remaining)
             {
                 aeron_resolution_header_ipv4_t *res_ipv4 = (aeron_resolution_header_ipv4_t *)res_header;
                 size_t entry_length = aeron_res_header_entry_length_ipv4(res_ipv4);
-                result = entry_length <= remaining ? (int)entry_length : -1;
+                result = res_ipv4->name_length >= 0 && entry_length <= remaining ? (int)entry_length : -1;
             }
             break;
         }

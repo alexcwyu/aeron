@@ -143,6 +143,13 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
+    if (AERON_THREADING_MODE_DEDICATED_SENDER_INVOKED == aeron_driver_context_get_threading_mode(context))
+    {
+        AERON_FPRINTF(stderr, "ERROR: DEDICATED_SENDER_INVOKED needs a host that invokes the sender; aeronmd has none\n");
+        AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
+        goto cleanup;
+    }
+
     if (aeron_driver_init(&driver, context) < 0)
     {
         AERON_FPRINTF(stderr, "ERROR: driver init (%d) %s\n", aeron_errcode(), aeron_errmsg());

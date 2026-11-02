@@ -1097,7 +1097,7 @@ protected:
             nullptr, nullptr, m_a.resolver.state, nullptr, nullptr, m_packet, length, &m_source, nullptr);
     }
 
-    alignas(8) uint8_t m_packet[256] = {};
+    alignas(8) uint8_t m_packet[1024] = {};
     struct sockaddr_storage m_source = {};
 };
 
@@ -1128,4 +1128,55 @@ TEST_F(NameResolverMalformedEntryTest, shouldRejectEntryLongerThanTheBytesLeftIn
     EXPECT_EQ(1, readSystemCounter(&m_a, AERON_SYSTEM_COUNTER_INVALID_PACKETS));
     EXPECT_EQ(1, readNeighborCounter(&m_a));
     EXPECT_EQ(1, readCacheEntriesCounter(&m_a));
+}
+
+TEST_F(NameResolverMalformedEntryTest, shouldRejectEntryWithEmptyName)
+{
+    const size_t first_offset = sizeof(aeron_frame_header_t);
+    const size_t first_length = addEntry(first_offset, "B");
+    setNameLength(first_offset, 0);
+
+    receive(first_offset + first_length);
+
+    EXPECT_EQ(1, readSystemCounter(&m_a, AERON_SYSTEM_COUNTER_INVALID_PACKETS));
+    EXPECT_EQ(0, readCacheEntriesCounter(&m_a));
+}
+
+// An entry too long for any neighbour frame would stall the resolution send loop once cached.
+TEST_F(NameResolverMalformedEntryTest, shouldRejectEntryWithNameLongerThanMaxNameLength)
+{
+    const size_t first_offset = sizeof(aeron_frame_header_t);
+    const std::string name(513, 'x');
+    const size_t first_length = addEntry(first_offset, name.c_str());
+
+    receive(first_offset + first_length);
+
+    EXPECT_EQ(1, readSystemCounter(&m_a, AERON_SYSTEM_COUNTER_INVALID_PACKETS));
+    EXPECT_EQ(0, readCacheEntriesCounter(&m_a));
+}
+
+TEST_F(NameResolverMalformedEntryTest, shouldAcceptEntryWithMaxNameLength)
+{
+    const size_t first_offset = sizeof(aeron_frame_header_t);
+    const std::string name(512, 'x');
+    const size_t first_length = addEntry(first_offset, name.c_str());
+
+    receive(first_offset + first_length);
+
+    EXPECT_EQ(0, readSystemCounter(&m_a, AERON_SYSTEM_COUNTER_INVALID_PACKETS));
+    EXPECT_EQ(1, readCacheEntriesCounter(&m_a));
+}
+
+// The frame dissector sizes each entry with this; a negative name length must end the dissection.
+TEST_F(NameResolverTest, shouldGiveNoEntryLengthForNegativeNameLength)
+{
+    alignas(8) uint8_t entry[64] = {};
+    auto *ipv4 = reinterpret_cast<aeron_resolution_header_ipv4_t *>(entry);
+    ipv4->resolution_header.res_type = AERON_RES_HEADER_TYPE_NAME_TO_IP4_MD;
+
+    ipv4->name_length = -1;
+    EXPECT_EQ(-1, aeron_res_header_entry_length(entry, sizeof(entry)));
+
+    ipv4->name_length = 4;
+    EXPECT_EQ(static_cast<int>(aeron_res_header_entry_length_ipv4(ipv4)), aeron_res_header_entry_length(entry, sizeof(entry)));
 }
