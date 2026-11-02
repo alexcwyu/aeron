@@ -16,6 +16,8 @@
 
 #include <array>
 #include <cstdint>
+#include <cstring>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -278,4 +280,24 @@ TEST_F(CountersTest, shouldResetValueAndReferenceIdIfReused)
     aeron_counters_manager_counter_reference_id(&m_manager, id_two, expected_reference_id_two);
     EXPECT_EQ(0, aeron_counters_reader_counter_reference_id(&m_reader, id_two, &reference_id_two));
     EXPECT_EQ(expected_reference_id_two, reference_id_two);
+}
+
+static void countMetadataRecord(
+    int32_t, int32_t, const uint8_t *, size_t, const uint8_t *, size_t, void *clientd)
+{
+    (*static_cast<int *>(clientd))++;
+}
+
+TEST(CountersMetadataTest, shouldVisitCompleteMetadataRecordsOnly)
+{
+    // 992 bytes hold one whole record: the allocated record at 512 would hand its callback a key and label past the end.
+    std::vector<uint8_t> metadata(992, 0);
+    const int32_t allocated = AERON_COUNTER_RECORD_ALLOCATED;
+    std::memcpy(metadata.data(), &allocated, sizeof(allocated));
+    std::memcpy(metadata.data() + AERON_COUNTERS_MANAGER_METADATA_LENGTH, &allocated, sizeof(allocated));
+
+    int visited = 0;
+    aeron_counters_reader_foreach_metadata(metadata.data(), metadata.size(), countMetadataRecord, &visited);
+
+    EXPECT_EQ(1, visited);
 }

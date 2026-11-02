@@ -289,7 +289,8 @@ void aeron_counters_reader_foreach_metadata(
 {
     int32_t id = 0;
 
-    for (size_t i = 0; i < metadata_length; i += AERON_COUNTERS_MANAGER_METADATA_LENGTH)
+    for (size_t i = 0; i + AERON_COUNTERS_MANAGER_METADATA_LENGTH <= metadata_length;
+        i += AERON_COUNTERS_MANAGER_METADATA_LENGTH)
     {
         aeron_counter_metadata_descriptor_t *record = (aeron_counter_metadata_descriptor_t *)(metadata_buffer + i);
         int32_t record_state;
@@ -325,7 +326,10 @@ void aeron_counters_reader_foreach_counter(
 {
     int32_t id = 0;
 
-    for (size_t i = 0; i < counters_reader->metadata_length; i += AERON_COUNTERS_MANAGER_METADATA_LENGTH)
+    for (size_t i = 0;
+        i + AERON_COUNTERS_MANAGER_METADATA_LENGTH <= counters_reader->metadata_length &&
+        id <= counters_reader->max_counter_id;
+        i += AERON_COUNTERS_MANAGER_METADATA_LENGTH)
     {
         aeron_counter_metadata_descriptor_t *record = (aeron_counter_metadata_descriptor_t *)(
             counters_reader->metadata + i);
@@ -365,7 +369,10 @@ int32_t aeron_counters_reader_find_by_type_id_and_registration_id(
     int64_t registration_id)
 {
     int32_t counter_id = 0;
-    for (size_t i = 0; i < counters_reader->metadata_length; i += AERON_COUNTERS_MANAGER_METADATA_LENGTH)
+    for (size_t i = 0;
+        i + AERON_COUNTERS_MANAGER_METADATA_LENGTH <= counters_reader->metadata_length &&
+        counter_id <= counters_reader->max_counter_id;
+        i += AERON_COUNTERS_MANAGER_METADATA_LENGTH)
     {
         aeron_counter_metadata_descriptor_t *record = (aeron_counter_metadata_descriptor_t *)(counters_reader->metadata + i);
         int32_t record_state;

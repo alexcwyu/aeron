@@ -248,6 +248,8 @@ assembler allocation/error paths
 ([details](docs/patches/13-client-error-paths.md)). These changes are BUG FIXes.
 An independent recheck then relaxed the CnC record-multiple check, freed map keys on
 failed init, read the source-identity length once and registered every assembler case.
+A second recheck required counter buffer lengths that keep 64-bit alignment and
+bounded counter iteration by complete metadata records and `max_counter_id`.
 Regression receipts
 are saved in the parent repository's target/review directory. Full-gate status is
 reported by the parent and is not inferred from the individual regressions.

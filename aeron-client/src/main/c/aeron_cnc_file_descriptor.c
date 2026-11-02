@@ -122,10 +122,13 @@ static aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
     if (_metadata->to_driver_buffer_length < (int32_t)(AERON_RB_TRAILER_LENGTH + AERON_RB_RECORD_HEADER_LENGTH) ||
         _metadata->to_clients_buffer_length <
             (int32_t)(AERON_BROADCAST_BUFFER_TRAILER_LENGTH + AERON_BROADCAST_RECORD_HEADER_LENGTH) ||
-        !AERON_IS_POWER_OF_TWO(_metadata->to_driver_buffer_length - (int32_t)AERON_RB_TRAILER_LENGTH) ||
-        !AERON_IS_POWER_OF_TWO(_metadata->to_clients_buffer_length - (int32_t)AERON_BROADCAST_BUFFER_TRAILER_LENGTH) ||
+        !AERON_IS_POWER_OF_TWO((uint32_t)(_metadata->to_driver_buffer_length - (int32_t)AERON_RB_TRAILER_LENGTH)) ||
+        !AERON_IS_POWER_OF_TWO(
+            (uint32_t)(_metadata->to_clients_buffer_length - (int32_t)AERON_BROADCAST_BUFFER_TRAILER_LENGTH)) ||
         _metadata->counter_metadata_buffer_length < 0 || _metadata->counter_values_buffer_length < 0 ||
         _metadata->error_log_buffer_length < 0 ||
+        0 != _metadata->counter_metadata_buffer_length % (int32_t)sizeof(int64_t) ||
+        0 != _metadata->counter_values_buffer_length % (int32_t)sizeof(int64_t) ||
         !AERON_COUNTERS_MANAGER_IS_BUFFER_LENGTHS_VALID(
             (size_t)_metadata->counter_metadata_buffer_length, (size_t)_metadata->counter_values_buffer_length))
     {
