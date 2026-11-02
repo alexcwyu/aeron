@@ -33,6 +33,18 @@ endfunction()
 
 if (AERON_UNIT_TESTS)
     aeron_c_client_test(assembler_allocation_test aeron_assembler_allocation_test.c)
+    foreach (assembler_case "2" "2 controlled" "3 controlled" "0 growth" "0 map" "0 controlled-map"
+        "2 handler-map" "3 handler-map")
+        separate_arguments(assembler_args UNIX_COMMAND "${assembler_case}")
+        string(REPLACE " " "_" assembler_name "${assembler_case}")
+        add_test(NAME assembler_allocation_test_${assembler_name} COMMAND assembler_allocation_test ${assembler_args})
+    endforeach ()
+    foreach (assembler_kind 0 1 2 3)
+        foreach (assembler_stage handler-begin handler-middle handler-end)
+            add_test(NAME assembler_allocation_test_${assembler_kind}_${assembler_stage}
+                COMMAND assembler_allocation_test ${assembler_kind} ${assembler_stage})
+        endforeach ()
+    endforeach ()
     add_library(aeron_dlopen_test_lib_a SHARED util/aeron_dlopen_test_lib_a.c)
     set_target_properties(aeron_dlopen_test_lib_a PROPERTIES C_VISIBILITY_PRESET default)
 

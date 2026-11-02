@@ -1,6 +1,6 @@
 # Ownership and progress fixes over patch.6
 
-Local patch.7 review batch, 2026-11-02. All production changes are BUG FIXes.
+Patch.7 review batch, 2026-11-02. All production changes are BUG FIXes.
 
 | Path | Failure | Correction |
 |---|---|---|

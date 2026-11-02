@@ -126,8 +126,6 @@ static aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
         !AERON_IS_POWER_OF_TWO(_metadata->to_clients_buffer_length - (int32_t)AERON_BROADCAST_BUFFER_TRAILER_LENGTH) ||
         _metadata->counter_metadata_buffer_length < 0 || _metadata->counter_values_buffer_length < 0 ||
         _metadata->error_log_buffer_length < 0 ||
-        _metadata->counter_metadata_buffer_length % AERON_COUNTERS_MANAGER_METADATA_LENGTH != 0 ||
-        _metadata->counter_values_buffer_length % AERON_COUNTERS_MANAGER_VALUE_LENGTH != 0 ||
         !AERON_COUNTERS_MANAGER_IS_BUFFER_LENGTHS_VALID(
             (size_t)_metadata->counter_metadata_buffer_length, (size_t)_metadata->counter_values_buffer_length))
     {

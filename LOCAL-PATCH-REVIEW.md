@@ -1,8 +1,8 @@
 # Aeron native patch review
 
-Additional local patch.7 follow-up: [allocation and layout fixes](docs/patches/12-review-allocation-and-layout.md).
+Additional patch.7 follow-up: [allocation and layout fixes](docs/patches/12-review-allocation-and-layout.md).
 
-Current local review: [patch.7 ownership and progress fixes](docs/patches/11-ownership-and-progress.md)
+Current review: [patch.7 ownership and progress fixes](docs/patches/11-ownership-and-progress.md)
 over `1.53.3-patch.6`. The new entry records current tests and outstanding checks;
 the 1.52.2 evidence below is historical and does not validate the current tree.
 
@@ -235,9 +235,9 @@ warnings as errors: `name_resolver_test`, `publication_image_test` and
 `sender_shutdown_test` pass; three of the new resolver cases fail against
 `1.53.3-patch.5`.
 
-## Ownership, allocation and progress (local 1.53.3-patch.7, 2026-11-02)
+## Ownership, allocation and progress (1.53.3-patch.7, 2026-11-02)
 
-The local follow-up commits repair retained-image admission under allocation
+The follow-up commits repair retained-image admission under allocation
 pressure, shared loss-supplier ownership, Cubic allocation cleanup, oversized
 resolver-entry progress and invoked-sender startup/shutdown
 ([details](docs/patches/11-ownership-and-progress.md)); archive channel/connection
@@ -246,6 +246,8 @@ allocation cleanup, CnC layout validation and recording source-identity bounds
 progress, unarmed descriptor dispatch, timed-out handler command ownership and
 assembler allocation/error paths
 ([details](docs/patches/13-client-error-paths.md)). These changes are BUG FIXes.
-The patch.7 tag is local only; no fork push has been performed. Regression receipts
+An independent recheck then relaxed the CnC record-multiple check, freed map keys on
+failed init, read the source-identity length once and registered every assembler case.
+Regression receipts
 are saved in the parent repository's target/review directory. Full-gate status is
 reported by the parent and is not inferred from the individual regressions.

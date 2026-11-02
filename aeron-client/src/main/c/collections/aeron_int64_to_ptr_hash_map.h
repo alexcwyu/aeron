@@ -62,6 +62,8 @@ inline int aeron_int64_to_ptr_hash_map_init(
 
     if (aeron_alloc((void **)&map->values, (capacity * sizeof(void *))) < 0)
     {
+        aeron_free(map->keys);
+        map->keys = NULL;
         AERON_APPEND_ERR("%s", "");
         return -1;
     }
