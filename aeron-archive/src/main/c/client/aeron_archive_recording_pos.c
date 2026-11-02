@@ -15,6 +15,7 @@
  */
 
 #include "util/aeron_error.h"
+#include <errno.h>
 #include "concurrent/aeron_counters_manager.h"
 
 #define AERON_ARCHIVE_RECORDING_POSITION_TYPE_ID 100
@@ -143,10 +144,15 @@ int aeron_archive_recording_pos_get_source_identity(aeron_counters_reader_t *cou
     if (AERON_COUNTER_RECORD_ALLOCATED == state &&
         AERON_ARCHIVE_RECORDING_POSITION_TYPE_ID == type_id)
     {
-        len = (int32_t)*len_p;
+        if (key->source_identity_length < 0 ||
+            (size_t)key->source_identity_length >
+                sizeof(((aeron_counter_metadata_descriptor_t *)0)->key) - sizeof(*key))
+        {
+            AERON_SET_ERR(EINVAL, "%s", "Invalid recording source identity length");
+            return -1;
+        }
 
-        // use the shorter of the two
-        len = key->source_identity_length < len ? key->source_identity_length : len;
+        len = (size_t)key->source_identity_length < *len_p ? key->source_identity_length : (int32_t)*len_p;
 
         // the source_identity string comes right after the key definition
         memcpy((void *)dst,((uint8_t *)key + sizeof(struct aeron_archive_recording_pos_key_defn)),len);

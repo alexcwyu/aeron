@@ -28,6 +28,9 @@
 #include "aeron_common.h"
 #include "util/aeron_error.h"
 #include "aeron_cnc_file_descriptor.h"
+#include "concurrent/aeron_rb.h"
+#include "concurrent/aeron_broadcast_descriptor.h"
+#include "concurrent/aeron_counters_manager.h"
 
 int32_t aeron_cnc_version_volatile(aeron_cnc_metadata_t *metadata)
 {
@@ -113,6 +116,23 @@ static aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
             (int)aeron_semantic_version_patch(cnc_version));
         aeron_unmap(cnc_mmap);
 
+        return AERON_CNC_LOAD_FAILED;
+    }
+
+    if (_metadata->to_driver_buffer_length < (int32_t)(AERON_RB_TRAILER_LENGTH + AERON_RB_RECORD_HEADER_LENGTH) ||
+        _metadata->to_clients_buffer_length <
+            (int32_t)(AERON_BROADCAST_BUFFER_TRAILER_LENGTH + AERON_BROADCAST_RECORD_HEADER_LENGTH) ||
+        !AERON_IS_POWER_OF_TWO(_metadata->to_driver_buffer_length - (int32_t)AERON_RB_TRAILER_LENGTH) ||
+        !AERON_IS_POWER_OF_TWO(_metadata->to_clients_buffer_length - (int32_t)AERON_BROADCAST_BUFFER_TRAILER_LENGTH) ||
+        _metadata->counter_metadata_buffer_length < 0 || _metadata->counter_values_buffer_length < 0 ||
+        _metadata->error_log_buffer_length < 0 ||
+        _metadata->counter_metadata_buffer_length % AERON_COUNTERS_MANAGER_METADATA_LENGTH != 0 ||
+        _metadata->counter_values_buffer_length % AERON_COUNTERS_MANAGER_VALUE_LENGTH != 0 ||
+        !AERON_COUNTERS_MANAGER_IS_BUFFER_LENGTHS_VALID(
+            (size_t)_metadata->counter_metadata_buffer_length, (size_t)_metadata->counter_values_buffer_length))
+    {
+        AERON_SET_ERR(EINVAL, "%s", "Invalid CnC buffer layout");
+        aeron_unmap(cnc_mmap);
         return AERON_CNC_LOAD_FAILED;
     }
 

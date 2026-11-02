@@ -1,5 +1,7 @@
 # Aeron native patch review
 
+Additional local patch.7 follow-up: [allocation and layout fixes](docs/patches/12-review-allocation-and-layout.md).
+
 Current local review: [patch.7 ownership and progress fixes](docs/patches/11-ownership-and-progress.md)
 over `1.53.3-patch.6`. The new entry records current tests and outstanding checks;
 the 1.52.2 evidence below is historical and does not validate the current tree.

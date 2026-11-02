@@ -550,11 +550,12 @@ static int aeron_archive_context_set_channel(char **target_channel, size_t *targ
         }
         else if (channel_length > *target_channel_length)
         {
-            if (aeron_reallocf((void **)&temp, channel_length) < 0)
+            if (aeron_alloc((void **)&temp, channel_length) < 0)
             {
                 AERON_APPEND_ERR("%s", "unable to reallocate control_response_channel");
                 return -1;
             }
+            aeron_free(*target_channel);
         }
 
         snprintf(temp, channel_length, "%s", channel);

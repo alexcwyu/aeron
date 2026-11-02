@@ -476,6 +476,7 @@ int aeron_archive_async_connect_transition_to_done(aeron_archive_t **aeron_archi
         AERON_ARCHIVE_RECORDING_DESCRIPTOR_POLLER_FRAGMENT_LIMIT_DEFAULT) < 0)
     {
         AERON_APPEND_ERR("%s", "");
+        aeron_archive_async_connect_delete(async);
         return -1;
     }
 
@@ -490,6 +491,7 @@ int aeron_archive_async_connect_transition_to_done(aeron_archive_t **aeron_archi
     {
         AERON_APPEND_ERR("%s", "");
         aeron_archive_recording_descriptor_poller_close(recording_descriptor_poller);
+        aeron_archive_async_connect_delete(async);
         return -1;
     }
 
@@ -519,6 +521,11 @@ int aeron_archive_async_connect_transition_to_done(aeron_archive_t **aeron_archi
         async->archive_proxy = NULL;
         async->control_response_poller = NULL;
         async->ctx = NULL;
+    }
+    else
+    {
+        aeron_archive_recording_descriptor_poller_close(recording_descriptor_poller);
+        aeron_archive_recording_subscription_descriptor_poller_close(recording_subscription_descriptor_poller);
     }
 
     aeron_archive_async_connect_delete(async);

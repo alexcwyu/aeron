@@ -61,6 +61,7 @@ int aeron_archive_recording_subscription_descriptor_poller_create(
         _poller) < 0)
     {
         AERON_APPEND_ERR("%s", "aeron_fragment_assembler_create\n");
+        aeron_free(_poller);
         return -1;
     }
 
