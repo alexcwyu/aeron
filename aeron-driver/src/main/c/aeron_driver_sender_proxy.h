@@ -35,6 +35,7 @@ typedef struct aeron_driver_sender_proxy_stct
     } log;
     aeron_spsc_rb_t *command_queue;
     int64_t *fail_counter;
+    volatile bool shutdown_requested;
 }
 aeron_driver_sender_proxy_t;
 

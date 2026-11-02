@@ -1061,18 +1061,29 @@ static int aeron_driver_name_resolver_send_neighbor_resolutions(aeron_driver_nam
 
             assert(-1 != entry_length && "Invalid res_type crept in from somewhere");
 
-            resolution_header->age_in_ms = (int32_t)(now_ms - cache_entry->time_of_last_activity_ms);
-
             if (0 == entry_length)
             {
+                if (sizeof(aeron_frame_header_t) == entry_offset)
+                {
+                    /* A cached remote name can exceed our local MTU; keep scanning other entries. */
+                    j++;
+                    continue;
+                }
                 break;
             }
 
+            resolution_header->age_in_ms = (int32_t)(now_ms - cache_entry->time_of_last_activity_ms);
             entry_offset += entry_length;
             j++;
         }
 
         frame_header->frame_length = (int32_t)entry_offset;
+
+        if (sizeof(aeron_frame_header_t) == entry_offset)
+        {
+            i = j;
+            continue;
+        }
 
         for (size_t k = 0; k < resolver->neighbors.length; k++)
         {

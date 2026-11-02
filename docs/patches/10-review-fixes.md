@@ -15,5 +15,8 @@ Native tests: `NameResolverMalformedEntryTest` (empty name, 513 byte name,
 512 byte name) and `NameResolverTest.shouldGiveNoEntryLengthForNegativeNameLength`.
 The three rejection cases fail against `1.53.3-patch.5` and pass here
 (`name_resolver_test`); `publication_image_test` and `sender_shutdown_test`
-still pass. The recording signal fix is covered by the aeron-rust archive
-tests, which drive the C client against a live archive.
+still pass. The Rust recording-signal tests exercise constructed events and Rust
+dispatch; they do not prove the synchronous native producer's correlation field.
+That assignment is source-reviewed here, with a native negative-control test still
+outstanding. The name bound also does not prevent a valid name exceeding a small
+local resolver MTU; patch.7 addresses that separate send-loop progress defect.

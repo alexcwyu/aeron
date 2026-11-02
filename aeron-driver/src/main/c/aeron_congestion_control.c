@@ -382,7 +382,7 @@ int aeron_cubic_congestion_control_strategy_supplier(
 
     if (aeron_alloc(&_strategy->state, sizeof(aeron_cubic_congestion_control_strategy_state_t)) < 0)
     {
-        aeron_free(strategy);
+        aeron_free(_strategy);
         return -1;
     }
 

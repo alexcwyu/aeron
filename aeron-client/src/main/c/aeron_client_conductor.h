@@ -205,6 +205,7 @@ typedef struct aeron_client_conductor_stct
         aeron_client_managed_resource_t *array;
     }
     lingering_resources;
+    size_t owned_image_count;
 
     struct registering_resources_stct
     {

@@ -428,8 +428,10 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
 
     _context->send_channel_loss_supplier_func = NULL;
     _context->send_channel_loss_supplier_clientd = NULL;
+    _context->owns_send_channel_loss_supplier_clientd = false;
     _context->receive_channel_loss_supplier_func = NULL;
     _context->receive_channel_loss_supplier_clientd = NULL;
+    _context->owns_receive_channel_loss_supplier_clientd = false;
 
     if (aeron_wildcard_port_manager_init(&_context->sender_wildcard_port_manager, true) < 0)
     {
@@ -3138,9 +3140,10 @@ int aeron_driver_context_set_send_channel_loss_supplier(
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
-    /* re-setting the installed pair must preserve its owned state, not free and reattach it */
-    if (func == context->send_channel_loss_supplier_func && clientd == context->send_channel_loss_supplier_clientd)
+    /* Changing the callback must not free state that remains installed. */
+    if (clientd == context->send_channel_loss_supplier_clientd)
     {
+        context->send_channel_loss_supplier_func = func;
         return 0;
     }
 
@@ -3170,9 +3173,10 @@ int aeron_driver_context_set_receive_channel_loss_supplier(
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
-    /* re-setting the installed pair must preserve its owned state, not free and reattach it */
-    if (func == context->receive_channel_loss_supplier_func && clientd == context->receive_channel_loss_supplier_clientd)
+    /* Changing the callback must not free state that remains installed. */
+    if (clientd == context->receive_channel_loss_supplier_clientd)
     {
+        context->receive_channel_loss_supplier_func = func;
         return 0;
     }
 

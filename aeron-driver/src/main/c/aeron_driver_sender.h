@@ -94,6 +94,7 @@ int aeron_driver_sender_init(
 
 int aeron_driver_sender_do_work(void *clientd);
 void aeron_driver_sender_drain_commands_for_shutdown(aeron_driver_sender_t *sender);
+void aeron_driver_sender_discard_command_for_shutdown(const void *message);
 void aeron_driver_sender_on_close(void *clientd);
 
 void aeron_driver_sender_on_add_endpoint(void *clientd, void *command);

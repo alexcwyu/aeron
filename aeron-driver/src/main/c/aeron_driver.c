@@ -786,6 +786,8 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
     }
 
     _driver->context = context;
+    _driver->invoked_sender_started = false;
+    _driver->invoked_sender_starting = false;
 
     for (int i = 0; i < AERON_AGENT_RUNNER_MAX; i++)
     {
@@ -1313,6 +1315,21 @@ int aeron_driver_sender_invoke(aeron_driver_t *driver)
         return 0;
     }
 
+    if (driver->invoked_sender_starting)
+    {
+        return 0;
+    }
+    if (!driver->invoked_sender_started)
+    {
+        driver->invoked_sender_starting = true;
+        if (NULL != runner->on_start)
+        {
+            runner->on_start(runner->on_start_state, runner->role_name);
+        }
+        driver->invoked_sender_started = true;
+        driver->invoked_sender_starting = false;
+    }
+
     return aeron_agent_do_work(runner);
 }
 
@@ -1356,6 +1373,11 @@ int aeron_driver_close(aeron_driver_t *driver)
     {
         AERON_SET_ERR(EINVAL, "%s", "driver is null");
         return -1;
+    }
+
+    if (AERON_THREADING_MODE_DEDICATED_SENDER_INVOKED == driver->context->threading_mode)
+    {
+        AERON_SET_RELEASE(driver->sender.sender_proxy.shutdown_requested, true);
     }
 
     for (int i = AERON_AGENT_RUNNER_MAX - 1; i >= 0; i--)

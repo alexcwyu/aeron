@@ -20,6 +20,13 @@ void aeron_driver_sender_proxy_offer(aeron_driver_sender_proxy_t *sender_proxy, 
 {
     while (AERON_RB_SUCCESS != aeron_spsc_rb_write(sender_proxy->command_queue, 1, cmd, length))
     {
+        bool shutdown_requested;
+        AERON_GET_ACQUIRE(shutdown_requested, sender_proxy->shutdown_requested);
+        if (shutdown_requested)
+        {
+            aeron_driver_sender_discard_command_for_shutdown(cmd);
+            return;
+        }
         aeron_counter_increment_release(sender_proxy->fail_counter);
         sched_yield();
     }

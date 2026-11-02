@@ -39,6 +39,8 @@ typedef struct aeron_driver_stct
     aeron_driver_sender_t sender;
     aeron_driver_receiver_t receiver;
     aeron_agent_runner_t runners[AERON_AGENT_RUNNER_MAX];
+    bool invoked_sender_started;
+    bool invoked_sender_starting;
 }
 aeron_driver_t;
 

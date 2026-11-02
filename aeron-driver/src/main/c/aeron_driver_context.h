@@ -383,8 +383,10 @@ typedef struct aeron_driver_context_stct
 
     aeron_send_channel_loss_supplier_func_t send_channel_loss_supplier_func;
     void *send_channel_loss_supplier_clientd;
+    bool owns_send_channel_loss_supplier_clientd;
     aeron_receive_channel_loss_supplier_func_t receive_channel_loss_supplier_func;
     void *receive_channel_loss_supplier_clientd;
+    bool owns_receive_channel_loss_supplier_clientd;
 
     aeron_duty_cycle_tracker_t *conductor_duty_cycle_tracker;
     aeron_duty_cycle_tracker_t *sender_duty_cycle_tracker;

@@ -1,4 +1,10 @@
-# Aeron 1.52.2 native patch review
+# Aeron native patch review
+
+Current local review: [patch.7 ownership and progress fixes](docs/patches/11-ownership-and-progress.md)
+over `1.53.3-patch.6`. The new entry records current tests and outstanding checks;
+the 1.52.2 evidence below is historical and does not validate the current tree.
+
+## Aeron 1.52.2 review (historical)
 
 Status: complete, 2026-09-13. User approved three independent PR commits instead
 of one squash. Each commit's sole parent is upstream `1.52.2` (`5b62f21d91`).

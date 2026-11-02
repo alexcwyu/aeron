@@ -119,6 +119,9 @@ if (AERON_UNIT_TESTS)
     set_tests_properties(c_cnc_test PROPERTIES RUN_SERIAL TRUE)
 
     aeron_driver_test(congestion_control_test aeron_congestion_control_test.cpp)
+    add_executable(congestion_control_allocation_test aeron_congestion_control_allocation_test.c)
+    target_link_libraries(congestion_control_allocation_test aeron_driver ${CMAKE_THREAD_LIBS_INIT} ${AERON_LIB_WINSOCK_LIBS})
+    add_test(NAME congestion_control_allocation_test COMMAND congestion_control_allocation_test)
 
     aeron_driver_test(ipc_publication_test aeron_ipc_publication_test.cpp)
     aeron_driver_test(network_publication_test aeron_network_publication_test.cpp)

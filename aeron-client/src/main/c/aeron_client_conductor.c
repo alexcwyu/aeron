@@ -18,6 +18,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <assert.h>
 
 #include "aeron_client_conductor.h"
 #include "aeron_publication.h"
@@ -680,6 +681,42 @@ static aeron_subscription_t *aeron_client_conductor_find_subscription_by_id(
     return NULL;
 }
 
+static int aeron_client_conductor_reserve_image_linger_slot(aeron_client_conductor_t *conductor)
+{
+    const size_t maximum = SIZE_MAX / sizeof(aeron_client_managed_resource_t);
+    if (conductor->owned_image_count >= maximum)
+    {
+        AERON_SET_ERR(ENOMEM, "%s", "image linger capacity overflow");
+        return -1;
+    }
+    const size_t required = conductor->owned_image_count + 1;
+    if (required <= conductor->lingering_resources.capacity)
+    {
+        return 0;
+    }
+    const size_t capacity = required <= maximum / 2 ? required * 2 : required;
+    aeron_client_managed_resource_t *array;
+    if (aeron_alloc((void **)&array, capacity * sizeof(*array)) < 0)
+    {
+        return -1;
+    }
+    if (0 != conductor->lingering_resources.length)
+    {
+        memcpy(array, conductor->lingering_resources.array, conductor->lingering_resources.length * sizeof(*array));
+    }
+    aeron_free(conductor->lingering_resources.array);
+    conductor->lingering_resources.array = array;
+    conductor->lingering_resources.capacity = capacity;
+    return 0;
+}
+
+static void aeron_client_conductor_delete_owned_image(aeron_client_conductor_t *conductor, aeron_image_t *image)
+{
+    assert(conductor->owned_image_count > 0);
+    conductor->owned_image_count--;
+    aeron_image_delete(image);
+}
+
 static int aeron_client_conductor_on_available_image(
     aeron_client_conductor_t *conductor,
     aeron_image_buffers_ready_t *response,
@@ -693,6 +730,11 @@ static int aeron_client_conductor_on_available_image(
 
     if (NULL != subscription)
     {
+        /* Reserve before publishing the image so close can transfer ownership without allocating. */
+        if (aeron_client_conductor_reserve_image_linger_slot(conductor) < 0)
+        {
+            return -1;
+        }
         char log_file_str[AERON_MAX_PATH], source_identity_str[AERON_MAX_PATH];
 
         memcpy(log_file_str, log_file, (size_t)log_file_length);
@@ -727,6 +769,7 @@ static int aeron_client_conductor_on_available_image(
             return -1;
         }
 
+        conductor->owned_image_count++;
         if (aeron_array_to_ptr_hash_map_put(
             &conductor->image_by_key_map,
             (const uint8_t *)&image->key,
@@ -754,15 +797,7 @@ static int aeron_client_conductor_on_available_image(
 
 static int aeron_client_conductor_linger_image(aeron_client_conductor_t *conductor, aeron_image_t *image)
 {
-    int ensure_capacity_result = 0;
-
-    AERON_ARRAY_ENSURE_CAPACITY(ensure_capacity_result, conductor->lingering_resources, aeron_client_managed_resource_t)
-    if (ensure_capacity_result < 0)
-    {
-        AERON_APPEND_ERR("%s", "failed to add image to lingering_resources array");
-        aeron_client_conductor_handle_system_error(conductor);
-        return -1;
-    }
+    assert(conductor->lingering_resources.length < conductor->lingering_resources.capacity);
 
     aeron_client_managed_resource_t *resource =
         &conductor->lingering_resources.array[conductor->lingering_resources.length++];
@@ -788,7 +823,7 @@ static int aeron_client_conductor_on_unavailable_image(aeron_client_conductor_t 
                 .subscription_registration_id = response->subscription_registration_id,
             };
 
-        aeron_image_t *image = aeron_array_to_ptr_hash_map_remove(
+        aeron_image_t *image = aeron_array_to_ptr_hash_map_get(
             &conductor->image_by_key_map,
             (const uint8_t *)&key,
             sizeof(aeron_image_key_t));
@@ -800,17 +835,15 @@ static int aeron_client_conductor_on_unavailable_image(aeron_client_conductor_t 
                 return -1;
             }
 
+            aeron_array_to_ptr_hash_map_remove(&conductor->image_by_key_map, (const uint8_t *)&key, sizeof(key));
             aeron_client_conductor_subscription_prune_image_lists(subscription);
+            aeron_client_conductor_linger_image(conductor, image);
 
             if (NULL != subscription->on_unavailable_image)
             {
                 subscription->on_unavailable_image(subscription->on_unavailable_image_clientd, subscription, image);
             }
 
-            if (aeron_client_conductor_linger_image(conductor, image) < 0)
-            {
-                return -1;
-            }
         }
     }
 
@@ -1423,7 +1456,7 @@ static int aeron_client_conductor_check_lingering_resources(aeron_client_conduct
             if (aeron_image_refcnt_acquire(image) <= 0)
             {
                 aeron_client_conductor_release_log_buffer(conductor, image->log_buffer);
-                aeron_image_delete(image);
+                aeron_client_conductor_delete_owned_image(conductor, image);
 
                 aeron_array_fast_unordered_remove(
                     (uint8_t *)conductor->lingering_resources.array,
@@ -1559,7 +1592,7 @@ static int aeron_client_conductor_linger_or_delete_all_images(
         if (refcnt <= 0)
         {
             aeron_client_conductor_release_log_buffer(conductor, image->log_buffer);
-            aeron_image_delete(image);
+            aeron_client_conductor_delete_owned_image(conductor, image);
         }
         else if (!image->is_lingering)
         {
@@ -1779,7 +1812,7 @@ static void aeron_client_conductor_delete_log_buffer(void *clientd, int64_t key,
 
 static void aeron_client_conductor_delete_image(void *clientd, const uint8_t *key, size_t key_len, void *value)
 {
-    aeron_image_delete((aeron_image_t *)value);
+    aeron_client_conductor_delete_owned_image((aeron_client_conductor_t *)clientd, (aeron_image_t *)value);
 }
 
 static void aeron_client_conductor_delete_resource(void *clientd, int64_t key, void *value)
@@ -1850,7 +1883,7 @@ static void aeron_client_conductor_delete_resource(void *clientd, int64_t key, v
         }
 
         case AERON_CLIENT_MANAGED_RESOURCE_TYPE_IMAGE:
-            aeron_image_delete((aeron_image_t *)value);
+            aeron_client_conductor_delete_owned_image((aeron_client_conductor_t *)clientd, (aeron_image_t *)value);
             break;
 
         case AERON_CLIENT_MANAGED_RESOURCE_TYPE_STATIC_COUNTER:
@@ -1861,11 +1894,12 @@ static void aeron_client_conductor_delete_resource(void *clientd, int64_t key, v
     }
 }
 
-static void aeron_client_conductor_delete_lingering_resource(aeron_client_managed_resource_t *resource)
+static void aeron_client_conductor_delete_lingering_resource(
+    aeron_client_conductor_t *conductor, aeron_client_managed_resource_t *resource)
 {
     if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_IMAGE == resource->type)
     {
-        aeron_image_delete(resource->resource.image);
+        aeron_client_conductor_delete_owned_image(conductor, resource->resource.image);
     }
 }
 
@@ -2642,6 +2676,7 @@ int aeron_client_conductor_init(aeron_client_conductor_t *conductor, aeron_conte
     conductor->lingering_resources.array = NULL;
     conductor->lingering_resources.capacity = 0;
     conductor->lingering_resources.length = 0;
+    conductor->owned_image_count = 0;
 
     conductor->heartbeat_timestamp.addr = NULL;
     conductor->heartbeat_timestamp.counter_id = AERON_NULL_COUNTER_ID;
@@ -2759,15 +2794,15 @@ void aeron_client_conductor_on_close(aeron_client_conductor_t *conductor)
     }
 
     aeron_int64_to_ptr_hash_map_for_each(
-        &conductor->resource_by_id_map, aeron_client_conductor_delete_resource, NULL);
+        &conductor->resource_by_id_map, aeron_client_conductor_delete_resource, conductor);
     aeron_int64_to_ptr_hash_map_for_each(
         &conductor->log_buffer_by_id_map, aeron_client_conductor_delete_log_buffer, NULL);
     aeron_array_to_ptr_hash_map_for_each(
-        &conductor->image_by_key_map, aeron_client_conductor_delete_image, NULL);
+        &conductor->image_by_key_map, aeron_client_conductor_delete_image, conductor);
 
     for (size_t i = 0, length = conductor->lingering_resources.length; i < length; i++)
     {
-        aeron_client_conductor_delete_lingering_resource(&conductor->lingering_resources.array[i]);
+        aeron_client_conductor_delete_lingering_resource(conductor, &conductor->lingering_resources.array[i]);
     }
 
     aeron_client_conductor_on_cmd_client_close(conductor);

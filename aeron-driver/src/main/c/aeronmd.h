@@ -817,8 +817,8 @@ typedef void (*aeron_receive_channel_loss_supplier_func_t)(
     struct aeron_receive_channel_endpoint_stct *endpoint);
 
 /**
- * Setting a supplier releases the state aeron_debug_channel_endpoint_configuration_install installed on that side,
- * which the context owns; a caller-supplied clientd stays owned by the caller.
+ * Replacing clientd releases debug state owned by this context. Reusing the same clientd preserves its ownership,
+ * including when the callback changes. Other caller-supplied clientd values remain borrowed and must outlive use.
  */
 int aeron_driver_context_set_send_channel_loss_supplier(
     aeron_driver_context_t *context,
@@ -1159,6 +1159,8 @@ void aeron_driver_main_idle_strategy(aeron_driver_t *driver, int work_count);
  *
  * Only valid for the DEDICATED_SENDER_INVOKED threading mode after aeron_driver_start. The caller must be the only
  * thread invoking the sender and must stop before aeron_driver_close.
+ * The first invoke calls the Sender's configured on_start callback on this thread before doing work.
+ * Closing cancels blocked Sender command offers before joining the native Conductor; no further invoke is required.
  *
  * @param driver to run the Sender duty cycle on.
  * @return the work count, 0 when the sender is stopped, or -1 for error.

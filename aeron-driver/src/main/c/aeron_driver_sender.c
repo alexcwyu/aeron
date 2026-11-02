@@ -81,6 +81,7 @@ int aeron_driver_sender_init(
     sender->recvmmsg_func = context->udp_channel_transport_bindings->recvmmsg_func;
     sender->error_log = error_log;
     sender->sender_proxy.sender = sender;
+    sender->sender_proxy.shutdown_requested = false;
     sender->sender_proxy.command_queue = &context->sender_command_queue;
     sender->sender_proxy.fail_counter =
         aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_SENDER_PROXY_FAILS);
@@ -190,8 +191,7 @@ int aeron_driver_sender_do_work(void *clientd)
     return work_count + bytes_sent + (int)bytes_received;
 }
 
-static void aeron_driver_sender_drain_pending_commands_on_close(
-    int32_t msg_type_id, const void *message, size_t size, void *clientd)
+void aeron_driver_sender_discard_command_for_shutdown(const void *message)
 {
     aeron_command_base_t *cmd = (aeron_command_base_t *)message;
 
@@ -202,6 +202,12 @@ static void aeron_driver_sender_drain_pending_commands_on_close(
         aeron_uri_close(uri);
         aeron_free(uri);
     }
+}
+
+static void aeron_driver_sender_drain_pending_commands_on_close(
+    int32_t msg_type_id, const void *message, size_t size, void *clientd)
+{
+    aeron_driver_sender_discard_command_for_shutdown(message);
 }
 
 /* discard queued commands without network work or reverse conductor commands. */

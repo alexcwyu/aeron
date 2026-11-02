@@ -1167,6 +1167,31 @@ TEST_F(NameResolverMalformedEntryTest, shouldAcceptEntryWithMaxNameLength)
     EXPECT_EQ(1, readCacheEntriesCounter(&m_a));
 }
 
+class NameResolverSmallMtuTest : public NameResolverMalformedEntryTest
+{
+protected:
+    void SetUp() override
+    {
+        aeron_env_set(AERON_MTU_LENGTH_ENV_VAR, "64");
+        NameResolverMalformedEntryTest::SetUp();
+        aeron_env_unset(AERON_MTU_LENGTH_ENV_VAR);
+        ASSERT_EQ(64u, aeron_driver_context_get_mtu_length(m_a.context));
+    }
+};
+
+TEST_F(NameResolverSmallMtuTest, shouldMakeProgressWhenCachedEntryExceedsMtu)
+{
+    const size_t offset = sizeof(aeron_frame_header_t);
+    const std::string name(512, 'x');
+    receive(offset + addEntry(offset, name.c_str()));
+    receive(offset + addEntry(offset, "B"));
+    ASSERT_EQ(2, readCacheEntriesCounter(&m_a));
+
+    const int64_t now_ms = INT64_C(8932472347945) + 1001;
+    EXPECT_GE(m_a.resolver.do_work_func(&m_a.resolver, now_ms), 0);
+    EXPECT_EQ(2, readCacheEntriesCounter(&m_a));
+}
+
 // The frame dissector sizes each entry with this; a negative name length must end the dissection.
 TEST_F(NameResolverTest, shouldGiveNoEntryLengthForNegativeNameLength)
 {

@@ -566,6 +566,43 @@ TEST_F(DriverContextConfigTest, shouldReleaseDebugInstalledStateWhenReplacingCha
     aeron_driver_context_close(context);
 }
 
+TEST_F(DriverContextConfigTest, shouldNotFreeDebugSupplierStateBorrowedFromAnotherContext)
+{
+    aeron_driver_context_t *owner = nullptr;
+    aeron_driver_context_t *borrower = nullptr;
+    ASSERT_EQ(0, aeron_driver_context_init(&owner));
+    ASSERT_EQ(0, aeron_driver_context_init(&borrower));
+    ASSERT_EQ(0, aeron_debug_channel_endpoint_configuration_install(owner));
+
+    ASSERT_EQ(0, aeron_driver_context_set_send_channel_loss_supplier(
+        borrower, aeron_driver_context_get_send_channel_loss_supplier(owner),
+        aeron_driver_context_get_send_channel_loss_supplier_clientd(owner)));
+    ASSERT_EQ(0, aeron_driver_context_set_receive_channel_loss_supplier(
+        borrower, aeron_driver_context_get_receive_channel_loss_supplier(owner),
+        aeron_driver_context_get_receive_channel_loss_supplier_clientd(owner)));
+
+    ASSERT_EQ(0, aeron_driver_context_close(borrower));
+    ASSERT_EQ(0, aeron_driver_context_close(owner));
+}
+
+TEST_F(DriverContextConfigTest, shouldPreserveOwnedDebugStateWhenChangingOnlyTheSupplierFunction)
+{
+    aeron_driver_context_t *context = nullptr;
+    ASSERT_EQ(0, aeron_driver_context_init(&context));
+    ASSERT_EQ(0, aeron_debug_channel_endpoint_configuration_install(context));
+    const auto send = aeron_driver_context_get_send_channel_loss_supplier(context);
+    void *send_clientd = aeron_driver_context_get_send_channel_loss_supplier_clientd(context);
+    const auto receive = aeron_driver_context_get_receive_channel_loss_supplier(context);
+    void *receive_clientd = aeron_driver_context_get_receive_channel_loss_supplier_clientd(context);
+
+    ASSERT_EQ(0, aeron_driver_context_set_send_channel_loss_supplier(context, test_send_channel_loss_supplier, send_clientd));
+    ASSERT_EQ(0, aeron_driver_context_set_receive_channel_loss_supplier(
+        context, test_receive_channel_loss_supplier, receive_clientd));
+    ASSERT_EQ(0, aeron_driver_context_set_send_channel_loss_supplier(context, send, send_clientd));
+    ASSERT_EQ(0, aeron_driver_context_set_receive_channel_loss_supplier(context, receive, receive_clientd));
+    ASSERT_EQ(0, aeron_driver_context_close(context));
+}
+
 TEST_F(DriverContextConfigTest, shouldSetFlowControlRetransmitReceiverWindowMultiples)
 {
     aeron_driver_context_t *context;

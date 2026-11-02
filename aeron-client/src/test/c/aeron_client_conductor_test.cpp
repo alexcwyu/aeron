@@ -38,6 +38,10 @@ extern "C"
 #include "aeron_counter.h"
 #include "aeron_counters.h"
 #include "aeron_client.h"
+#ifdef AERON_ALLOCATION_FAULT_TEST
+extern bool test_conductor_fail_allocations;
+extern int test_conductor_allocation_failures;
+#endif
 }
 
 #define CAPACITY (16 * 1024)
@@ -1764,8 +1768,16 @@ TEST_P(RetainedImageCloseTest, shouldCloseNotifyAndReleaseExactlyOnce)
         ASSERT_EQ(0, aeron_subscription_image_count(subscription));
         EXPECT_EQ(1, callbacks);
     }
-    ASSERT_EQ(0, aeron_subscription_close(subscription, nullptr, nullptr));
+#ifdef AERON_ALLOCATION_FAULT_TEST
+    test_conductor_allocation_failures = 0;
+    test_conductor_fail_allocations = true;
+#endif
+    EXPECT_EQ(0, aeron_subscription_close(subscription, nullptr, nullptr));
     doWork();
+#ifdef AERON_ALLOCATION_FAULT_TEST
+    test_conductor_fail_allocations = false;
+    EXPECT_EQ(0, test_conductor_allocation_failures);
+#endif
     EXPECT_EQ(1, callbacks);
     if (retained > 0 && !release_in_callback)
     {

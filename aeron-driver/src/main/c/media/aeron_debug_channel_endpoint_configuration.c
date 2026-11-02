@@ -125,8 +125,9 @@ static void aeron_debug_channel_endpoint_configuration_on_receive_channel(
 
 static void aeron_debug_channel_endpoint_configuration_release_send(aeron_driver_context_t *context)
 {
-    if (aeron_debug_channel_endpoint_configuration_on_send_channel == context->send_channel_loss_supplier_func)
+    if (context->owns_send_channel_loss_supplier_clientd)
     {
+        context->owns_send_channel_loss_supplier_clientd = false;
         aeron_free(context->send_channel_loss_supplier_clientd);
         context->send_channel_loss_supplier_clientd = NULL;
         context->send_channel_loss_supplier_func = NULL;
@@ -135,8 +136,9 @@ static void aeron_debug_channel_endpoint_configuration_release_send(aeron_driver
 
 static void aeron_debug_channel_endpoint_configuration_release_receive(aeron_driver_context_t *context)
 {
-    if (aeron_debug_channel_endpoint_configuration_on_receive_channel == context->receive_channel_loss_supplier_func)
+    if (context->owns_receive_channel_loss_supplier_clientd)
     {
+        context->owns_receive_channel_loss_supplier_clientd = false;
         aeron_free(context->receive_channel_loss_supplier_clientd);
         context->receive_channel_loss_supplier_clientd = NULL;
         context->receive_channel_loss_supplier_func = NULL;
@@ -185,8 +187,10 @@ int aeron_debug_channel_endpoint_configuration_install(aeron_driver_context_t *c
 
     aeron_driver_context_set_send_channel_loss_supplier(
         context, aeron_debug_channel_endpoint_configuration_on_send_channel, send_params);
+    context->owns_send_channel_loss_supplier_clientd = true;
     aeron_driver_context_set_receive_channel_loss_supplier(
         context, aeron_debug_channel_endpoint_configuration_on_receive_channel, receive_params);
+    context->owns_receive_channel_loss_supplier_clientd = true;
 
     return 0;
 }
