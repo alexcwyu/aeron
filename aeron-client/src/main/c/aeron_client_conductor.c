@@ -299,6 +299,21 @@ static void aeron_client_conductor_async_resource_free(aeron_client_registering_
     }
 }
 
+enum aeron_handler_command_state
+{
+    AERON_HANDLER_PENDING, AERON_HANDLER_RUNNING, AERON_HANDLER_DONE,
+    AERON_HANDLER_CANCELLED, AERON_HANDLER_CLOSED
+};
+
+typedef struct aeron_owned_handler_command_stct
+{
+    aeron_client_handler_cmd_t command;
+    volatile int32_t state;
+}
+aeron_owned_handler_command_t;
+
+static int aeron_client_conductor_on_owned_handler(void *clientd, void *item);
+
 static void aeron_client_conductor_drain_pending_cmd_on_close(
     int32_t type, const void *ptr, size_t length, void *clientd)
 {
@@ -315,7 +330,15 @@ static void aeron_client_conductor_drain_pending_cmd_on_close(
     else
     {
         aeron_client_command_base_t *cmd = (aeron_client_command_base_t *)(*(uintptr_t*)ptr);
-        if (conductor == cmd->item) // async `add` commands
+        if (aeron_client_conductor_on_owned_handler == cmd->func)
+        {
+            aeron_owned_handler_command_t *owned = (aeron_owned_handler_command_t *)cmd;
+            if (!aeron_cas_int32(&owned->state, AERON_HANDLER_PENDING, AERON_HANDLER_CLOSED))
+            {
+                aeron_free(owned);
+            }
+        }
+        else if (conductor == cmd->item) // async `add` commands
         {
             aeron_client_conductor_async_resource_free((aeron_client_registering_resource_t *)cmd);
         }
@@ -2552,6 +2575,20 @@ static int aeron_client_conductor_on_cmd_handler(void *clientd, void *item)
     return result;
 }
 
+static int aeron_client_conductor_on_owned_handler(void *clientd, void *item)
+{
+    aeron_owned_handler_command_t *owned = item;
+    if (!aeron_cas_int32(&owned->state, AERON_HANDLER_PENDING, AERON_HANDLER_RUNNING))
+    {
+        aeron_free(owned);
+        return 0;
+    }
+
+    int result = aeron_client_conductor_on_cmd_handler(clientd, &owned->command);
+    AERON_SET_RELEASE(owned->state, AERON_HANDLER_DONE);
+    return result;
+}
+
 int aeron_client_conductor_init(aeron_client_conductor_t *conductor, aeron_context_t *context)
 {
     aeron_cnc_metadata_t *metadata = (aeron_cnc_metadata_t *)context->cnc_map.addr;
@@ -3579,33 +3616,51 @@ int aeron_client_conductor_async_handler(aeron_client_conductor_t *conductor, ae
         return aeron_client_conductor_on_cmd_handler(conductor, cmd);
     }
 
+    aeron_owned_handler_command_t *owned;
+    if (aeron_alloc((void **)&owned, sizeof(*owned)) < 0)
+    {
+        return -1;
+    }
+    owned->command = *cmd;
+    owned->command.command_base.func = aeron_client_conductor_on_owned_handler;
+    owned->state = AERON_HANDLER_PENDING;
+
     int64_t deadline_ns = (int64_t)(aeron_nano_clock() + conductor->driver_timeout_ns);
-    while (aeron_client_conductor_command_rb_offer(conductor->command_rb, cmd) < 0)
+    while (aeron_client_conductor_command_rb_offer(conductor->command_rb, owned) < 0)
     {
         if (aeron_nano_clock() >= deadline_ns)
+        {
+            aeron_free(owned);
+            AERON_SET_ERR(ETIMEDOUT, "%s", "time out waiting for client conductor thread to process message");
+            return -1;
+        }
+        sched_yield();
+    }
+
+    for (;;)
+    {
+        int32_t state;
+        AERON_GET_ACQUIRE(state, owned->state);
+        if (AERON_HANDLER_DONE == state || AERON_HANDLER_CLOSED == state)
+        {
+            aeron_free(owned);
+            if (AERON_HANDLER_CLOSED == state)
+            {
+                AERON_SET_ERR(EPERM, "%s", "client conductor closed before processing handler command");
+                return -1;
+            }
+            cmd->processed = true;
+            return 0;
+        }
+        if (aeron_nano_clock() >= deadline_ns &&
+            aeron_cas_int32(&owned->state, AERON_HANDLER_PENDING, AERON_HANDLER_CANCELLED))
         {
             AERON_SET_ERR(ETIMEDOUT, "%s", "time out waiting for client conductor thread to process message");
             return -1;
         }
-
+        /* A running handler owns registration until completion; only pending commands can be cancelled. */
         sched_yield();
     }
-
-    bool processed;
-    AERON_GET_ACQUIRE(processed, cmd->processed);
-    while (!processed)
-    {
-        if (aeron_nano_clock() >= deadline_ns)
-        {
-            AERON_SET_ERR(ETIMEDOUT, "%s", "time out waiting for client conductor thread to process message");
-            return -1;
-        }
-
-        sched_yield();
-        AERON_GET_ACQUIRE(processed, cmd->processed);
-    }
-
-    return 0;
 }
 
 int aeron_publication_error_values_copy(aeron_publication_error_values_t **dst, aeron_publication_error_values_t *src)

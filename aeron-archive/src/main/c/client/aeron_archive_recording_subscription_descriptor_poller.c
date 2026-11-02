@@ -243,6 +243,7 @@ aeron_controlled_fragment_handler_action_t aeron_archive_recording_subscription_
                 length);
 
             if (aeron_archive_client_recordingSubscriptionDescriptor_controlSessionId(&recording_subscription_descriptor) == poller->control_session_id &&
+                NULL != poller->recording_subscription_descriptor_consumer &&
                 aeron_archive_client_recordingSubscriptionDescriptor_correlationId(&recording_subscription_descriptor)== poller->correlation_id)
             {
                 struct aeron_archive_client_recordingSubscriptionDescriptor_string_view view;

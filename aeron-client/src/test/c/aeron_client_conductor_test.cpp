@@ -2740,3 +2740,17 @@ TEST_F(ClientConductorTest, shouldDrainQueuedRemoveCmdsFromProducerThreadOnClose
         << "Every successfully-offered cmd must have had its on_complete fired "
            "(either by doWork during the burst or by the close-time drain).";
 }
+
+TEST_F(ClientConductorTest, shouldNotApplyHandlerRegistrationAfterTimeout)
+{
+    m_conductor.invoker_mode = false;
+    m_conductor.driver_timeout_ns = 0;
+    aeron_client_handler_cmd_t cmd = {};
+    cmd.type = AERON_CLIENT_HANDLER_ADD_CLOSE_HANDLER;
+    cmd.handler.on_close_handler = [](void *) {};
+    const size_t before = m_conductor.close_handlers.length;
+    ASSERT_EQ(-1, aeron_client_conductor_async_handler(&m_conductor, &cmd));
+    ASSERT_EQ(ETIMEDOUT, aeron_errcode());
+    aeron_client_conductor_do_work(&m_conductor);
+    EXPECT_EQ(before, m_conductor.close_handlers.length);
+}

@@ -29,10 +29,16 @@ int aeron_buffer_builder_create(aeron_buffer_builder_t **buffer_builder)
     aeron_buffer_builder_t *_buffer_builder;
     aeron_data_header_t *_frame;
 
-    if (aeron_alloc((void **)&_buffer_builder, sizeof(aeron_buffer_builder_t)) < 0 ||
-        aeron_alloc((void **)&_frame, sizeof(aeron_data_header_t)) < 0)
+    if (aeron_alloc((void **)&_buffer_builder, sizeof(aeron_buffer_builder_t)) < 0)
     {
         AERON_APPEND_ERR("%s", "Failed to allocate buffer_builder");
+        return -1;
+    }
+
+    if (aeron_alloc((void **)&_frame, sizeof(aeron_data_header_t)) < 0)
+    {
+        aeron_free(_buffer_builder);
+        AERON_APPEND_ERR("%s", "Failed to allocate buffer_builder frame");
         return -1;
     }
 
@@ -90,12 +96,19 @@ int aeron_buffer_builder_ensure_capacity(aeron_buffer_builder_t *buffer_builder,
             return -1;
         }
 
-        if (aeron_reallocf((void **)&buffer_builder->buffer, (size_t)suitable_capacity) < 0)
+        uint8_t *buffer;
+        if (aeron_alloc((void **)&buffer, (size_t)suitable_capacity) < 0)
         {
             AERON_APPEND_ERR("%s", "Unable to reallocate buffer_builder->builder");
             return -1;
         }
 
+        if (buffer_builder->limit > 0)
+        {
+            memcpy(buffer, buffer_builder->buffer, buffer_builder->limit);
+        }
+        aeron_free(buffer_builder->buffer);
+        buffer_builder->buffer = buffer;
         buffer_builder->buffer_length = (size_t)suitable_capacity;
     }
 
@@ -127,6 +140,7 @@ int aeron_image_fragment_assembler_create(
 
     if (aeron_buffer_builder_create(&_assembler->buffer_builder) < 0)
     {
+        aeron_free(_assembler);
         return -1;
     }
 
@@ -163,13 +177,21 @@ void aeron_image_fragment_assembler_handler(
     {
         aeron_buffer_builder_reset(buffer_builder);
         aeron_buffer_builder_capture_header(buffer_builder, header);
-        aeron_buffer_builder_append(buffer_builder, buffer, length);
+        if (aeron_buffer_builder_append(buffer_builder, buffer, length) < 0)
+        {
+            aeron_buffer_builder_reset(buffer_builder);
+            return;
+        }
         int32_t next_term_offset = aeron_header_next_term_offset(header);
         aeron_buffer_builder_next_term_offset(buffer_builder, next_term_offset);
     }
     else if (buffer_builder->next_term_offset == header->frame->term_offset)
     {
-        aeron_buffer_builder_append(buffer_builder, buffer, length);
+        if (aeron_buffer_builder_append(buffer_builder, buffer, length) < 0)
+        {
+            aeron_buffer_builder_reset(buffer_builder);
+            return;
+        }
 
         if ((flags & AERON_DATA_HEADER_END_FLAG) == AERON_DATA_HEADER_END_FLAG)
         {
@@ -207,6 +229,7 @@ int aeron_image_controlled_fragment_assembler_create(
 
     if (aeron_buffer_builder_create(&_assembler->buffer_builder) < 0)
     {
+        aeron_free(_assembler);
         return -1;
     }
 
@@ -244,14 +267,20 @@ aeron_controlled_fragment_handler_action_t aeron_image_controlled_fragment_assem
     {
         aeron_buffer_builder_reset(buffer_builder);
         aeron_buffer_builder_capture_header(buffer_builder, header);
-        aeron_buffer_builder_append(buffer_builder, buffer, length);
+        if (aeron_buffer_builder_append(buffer_builder, buffer, length) < 0)
+        {
+            return AERON_ACTION_ABORT;
+        }
         int32_t next_term_offset = aeron_header_next_term_offset(header);
         aeron_buffer_builder_next_term_offset(buffer_builder, next_term_offset);
     }
     else if (buffer_builder->next_term_offset == header->frame->term_offset)
     {
         size_t limit = buffer_builder->limit;
-        aeron_buffer_builder_append(buffer_builder, buffer, length);
+        if (aeron_buffer_builder_append(buffer_builder, buffer, length) < 0)
+        {
+            return AERON_ACTION_ABORT;
+        }
 
         if ((flags & AERON_DATA_HEADER_END_FLAG) == AERON_DATA_HEADER_END_FLAG)
         {
@@ -301,6 +330,7 @@ int aeron_fragment_assembler_create(
         &_assembler->builder_by_session_id_map, 8, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
     {
         AERON_APPEND_ERR("%s", "Unable to init builder_by_session_id_map");
+        aeron_free(_assembler);
         return -1;
     }
 
@@ -351,24 +381,40 @@ void aeron_fragment_assembler_handler(
         {
             if (NULL == buffer_builder)
             {
-                if (aeron_buffer_builder_create(&buffer_builder) < 0 ||
-                    aeron_int64_to_ptr_hash_map_put(
-                        &assembler->builder_by_session_id_map, header->frame->session_id, buffer_builder) < 0)
+                if (aeron_buffer_builder_create(&buffer_builder) < 0)
                 {
+                    return;
+                }
+                const size_t resize_threshold = assembler->builder_by_session_id_map.resize_threshold;
+                if (aeron_int64_to_ptr_hash_map_put(
+                    &assembler->builder_by_session_id_map, header->frame->session_id, buffer_builder) < 0)
+                {
+                    aeron_int64_to_ptr_hash_map_remove(
+                        &assembler->builder_by_session_id_map, header->frame->session_id);
+                    assembler->builder_by_session_id_map.resize_threshold = resize_threshold;
+                    aeron_buffer_builder_delete(buffer_builder);
                     return;
                 }
             }
 
             aeron_buffer_builder_reset(buffer_builder);
             aeron_buffer_builder_capture_header(buffer_builder, header);
-            aeron_buffer_builder_append(buffer_builder, buffer, length);
+            if (aeron_buffer_builder_append(buffer_builder, buffer, length) < 0)
+            {
+                aeron_buffer_builder_reset(buffer_builder);
+                return;
+            }
             aeron_buffer_builder_next_term_offset(buffer_builder, next_term_offset);
         }
         else if (NULL != buffer_builder)
         {
             if (buffer_builder->next_term_offset == header->frame->term_offset)
             {
-                aeron_buffer_builder_append(buffer_builder, buffer, length);
+                if (aeron_buffer_builder_append(buffer_builder, buffer, length) < 0)
+                {
+                    aeron_buffer_builder_reset(buffer_builder);
+                    return;
+                }
 
                 if ((flags & AERON_DATA_HEADER_END_FLAG) == AERON_DATA_HEADER_END_FLAG)
                 {
@@ -424,6 +470,7 @@ int aeron_controlled_fragment_assembler_create(
         &_assembler->builder_by_session_id_map, 8, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
     {
         AERON_APPEND_ERR("%s", "Unable to init builder_by_session_id_map");
+        aeron_free(_assembler);
         return -1;
     }
 
@@ -474,17 +521,28 @@ aeron_controlled_fragment_handler_action_t aeron_controlled_fragment_assembler_h
         {
             if (NULL == buffer_builder)
             {
-                if (aeron_buffer_builder_create(&buffer_builder) < 0 ||
-                    aeron_int64_to_ptr_hash_map_put(
-                        &assembler->builder_by_session_id_map, header->frame->session_id, buffer_builder) < 0)
+                if (aeron_buffer_builder_create(&buffer_builder) < 0)
                 {
+                    return AERON_ACTION_ABORT;
+                }
+                const size_t resize_threshold = assembler->builder_by_session_id_map.resize_threshold;
+                if (aeron_int64_to_ptr_hash_map_put(
+                    &assembler->builder_by_session_id_map, header->frame->session_id, buffer_builder) < 0)
+                {
+                    aeron_int64_to_ptr_hash_map_remove(
+                        &assembler->builder_by_session_id_map, header->frame->session_id);
+                    assembler->builder_by_session_id_map.resize_threshold = resize_threshold;
+                    aeron_buffer_builder_delete(buffer_builder);
                     return AERON_ACTION_ABORT;
                 }
             }
 
             aeron_buffer_builder_reset(buffer_builder);
             aeron_buffer_builder_capture_header(buffer_builder, header);
-            aeron_buffer_builder_append(buffer_builder, buffer, length);
+            if (aeron_buffer_builder_append(buffer_builder, buffer, length) < 0)
+            {
+                return AERON_ACTION_ABORT;
+            }
             aeron_buffer_builder_next_term_offset(buffer_builder, aeron_header_next_term_offset(header));
         }
         else if (NULL != buffer_builder)
@@ -492,7 +550,10 @@ aeron_controlled_fragment_handler_action_t aeron_controlled_fragment_assembler_h
             if (buffer_builder->next_term_offset == header->frame->term_offset)
             {
                 size_t limit = buffer_builder->limit;
-                aeron_buffer_builder_append(buffer_builder, buffer, length);
+                if (aeron_buffer_builder_append(buffer_builder, buffer, length) < 0)
+                {
+                    return AERON_ACTION_ABORT;
+                }
 
                 if ((flags & AERON_DATA_HEADER_END_FLAG) == AERON_DATA_HEADER_END_FLAG)
                 {

@@ -56,6 +56,8 @@ function(aeron_c_archive_system_test name file)
 endfunction()
 
 if (AERON_UNIT_TESTS)
+    aeron_c_archive_unit_test(aeron_archive_unarmed_poller_test client/aeron_archive_unarmed_poller_test.c)
+    target_include_directories(aeron_archive_unarmed_poller_test PRIVATE "${ARCHIVE_C_CODEC_TARGET_DIR}/..")
     aeron_c_archive_unit_test(aeron_archive_context_allocation_test client/aeron_archive_context_allocation_test.c)
     aeron_c_archive_unit_test(aeron_archive_terminal_allocation_test client/aeron_archive_terminal_allocation_test.c)
     target_include_directories(aeron_archive_terminal_allocation_test PRIVATE "${ARCHIVE_C_CODEC_TARGET_DIR}/..")

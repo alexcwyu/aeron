@@ -607,6 +607,7 @@ int aeron_archive_add_recorded_publication(
     while (NULL == _publication)
     {
         aeron_archive_idle(aeron_archive);
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
 
         if (aeron_async_add_publication_poll(&_publication, async) < 0)
         {
@@ -688,6 +689,7 @@ int aeron_archive_add_recorded_exclusive_publication(
     while (NULL == _exclusive_publication)
     {
         aeron_archive_idle(aeron_archive);
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
 
         if (aeron_async_add_exclusive_publication_poll(&_exclusive_publication, async) < 0)
         {
@@ -1494,6 +1496,7 @@ static int aeron_archive_replay_locked(
     while (NULL == subscription)
     {
         aeron_archive_idle(aeron_archive);
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
 
         if (aeron_async_add_subscription_poll(&subscription, async_add_subscription) < 0)
         {
@@ -2334,6 +2337,7 @@ int aeron_archive_replay_via_response_channel(
         }
 
         aeron_archive_idle(aeron_archive);
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
 
         if (aeron_async_add_subscription_poll(&replay_subscription, async) < 0)
         {
@@ -2365,6 +2369,7 @@ int aeron_archive_replay_via_response_channel(
         }
 
         aeron_archive_idle(aeron_archive);
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
     }
 
     *subscription_p = replay_subscription;
@@ -2497,6 +2502,7 @@ int aeron_archive_initiate_replay_via_response_channel(
         }
 
         aeron_archive_idle(aeron_archive);
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
 
         if (aeron_async_add_exclusive_publication_poll(&exclusive_publication, async) < 0)
         {
@@ -2537,6 +2543,7 @@ int aeron_archive_initiate_replay_via_response_channel(
         }
 
         aeron_archive_idle(aeron_archive);
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
     }
 
     int64_t *pub_limit_counter = aeron_counters_reader_addr(counters_reader, pub_limit_counter_id);
@@ -2550,6 +2557,7 @@ int aeron_archive_initiate_replay_via_response_channel(
         }
 
         aeron_archive_idle(aeron_archive);
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
     }
 
     // using the newly created proxy (based on the newly created exclusive publisher), send the replay request

@@ -32,6 +32,7 @@ function(aeron_c_client_test name file)
 endfunction()
 
 if (AERON_UNIT_TESTS)
+    aeron_c_client_test(assembler_allocation_test aeron_assembler_allocation_test.c)
     add_library(aeron_dlopen_test_lib_a SHARED util/aeron_dlopen_test_lib_a.c)
     set_target_properties(aeron_dlopen_test_lib_a PROPERTIES C_VISIBILITY_PRESET default)
 
