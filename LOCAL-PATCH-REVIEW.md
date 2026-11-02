@@ -215,3 +215,14 @@ four commits over `1.53.3-patch.4`
 ([details](docs/patches/09-driver-defects-and-sender-mode.md)). Linux
 and macOS gates: `publication_image_test`, `name_resolver_test` and
 `sender_shutdown_test` pass; the first two fail against `1.53.3-patch.4`.
+
+## Review fixes (1.53.3-patch.6, 2026-11-02)
+
+The recording signal's `correlation_id` on the synchronous dispatch path, the
+name resolver's name length bounds (1 to 512 bytes, as Java), a negative name
+length in the resolution entry length helper, and `aeronmd` refusing
+`DEDICATED_SENDER_INVOKED`, over `1.53.3-patch.5`
+([details](docs/patches/10-review-fixes.md)). macOS arm64 Clang Debug with
+warnings as errors: `name_resolver_test`, `publication_image_test` and
+`sender_shutdown_test` pass; three of the new resolver cases fail against
+`1.53.3-patch.5`.
